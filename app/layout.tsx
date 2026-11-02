@@ -10,7 +10,8 @@ export const metadata: Metadata = {
     follow: false,
   },
   icons: {
-    icon: '/favicon.svg',
+    icon: '/assets/logo-damri.png',
+    apple: '/assets/logo-damri.png',
   },
 }
 
