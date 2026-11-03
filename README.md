@@ -59,7 +59,3 @@ npm run dev
 Buat file `.env.local` di root project dan isi variabel lingkungan sesuai konfigurasi project Supabase.
 
 Jangan mengunggah file `.env.local` atau kredensial rahasia ke repository publik.
-
-## Status Pengembangan
-
-Project ini dikembangkan sebagai bagian dari Proyek Konsultasi Program Studi Teknik Komputer, Universitas Pendidikan Indonesia.
