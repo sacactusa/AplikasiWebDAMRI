@@ -1,27 +1,29 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { CheckCircle2, List, Plus, User } from "lucide-react"
+import { useMemo, useRef, useState } from "react"
+import { CheckCircle2, History, List, Plus, User } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { ME } from "@/lib/data"
 import { cx } from "@/components/ui"
 import DaftarKeberangkatan from "./driver/DaftarKeberangkatan"
+import RiwayatSopir from "./driver/RiwayatSopir"
 import ProfilSopir from "./driver/ProfilSopir"
 import InputKeberangkatan from "./driver/InputKeberangkatan"
 import DetailKeberangkatan from "./driver/DetailKeberangkatan"
-import type { DriverProfile } from "./driver/shared"
+import { DRIVER_PHOTO, type DriverProfile } from "./driver/shared"
 
 interface Props {
   deps: Departure[]
   setDeps: React.Dispatch<React.SetStateAction<Departure[]>>
   offline: boolean
-  toast: (t: string) => void
+  toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   submitted: (d: Departure) => void
 }
 
 type View =
   | { n: "list" }
+  | { n: "riwayat" }
   | { n: "profil" }
   | { n: "add" }
   | { n: "detail"; id: string }
@@ -36,10 +38,20 @@ export default function Driver({
   submitted,
 }: Props) {
   const [view, setView] = useState<View>({ n: "list" })
-  const [profile, setProfile] = useState<DriverProfile>({
-    nama: ME,
-    email: "sopir@damri.co.id",
-    telepon: "0813 2456 7890",
+  const lastTabRef = useRef<"list" | "riwayat">("list")
+  const [profile, setProfile] = useState<DriverProfile>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("damri_driver_profile")
+        if (saved) return JSON.parse(saved)
+      } catch {}
+    }
+    return {
+      nama: ME,
+      email: "sopir@damri.co.id",
+      telepon: "0813 2456 7890",
+      foto: DRIVER_PHOTO,
+    }
   })
   const [password, setPassword] = useState("damri123")
   const mine = useMemo(
@@ -49,8 +61,18 @@ export default function Driver({
         .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)),
     [deps],
   )
-  const tab = view.n === "profil" ? "profil" : "list"
-  const showNav = view.n === "list" || view.n === "profil"
+  const pendingRevisions = useMemo(
+    () => mine.filter((d) => Boolean(d.rejectNote)).length,
+    [mine],
+  )
+  const tab =
+    view.n === "profil"
+      ? "profil"
+      : view.n === "riwayat"
+        ? "riwayat"
+        : "list"
+  const showNav =
+    view.n === "list" || view.n === "riwayat" || view.n === "profil"
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-white sm:border-x sm:border-line">
@@ -59,13 +81,33 @@ export default function Driver({
           <DaftarKeberangkatan
             mine={mine}
             nama={profile.nama}
-            onOpen={(id) => setView({ n: "detail", id })}
+            onOpen={(id) => {
+              lastTabRef.current = "list"
+              setView({ n: "detail", id })
+            }}
+          />
+        )}
+        {view.n === "riwayat" && (
+          <RiwayatSopir
+            mine={mine}
+            nama={profile.nama}
+            onOpen={(id) => {
+              lastTabRef.current = "riwayat"
+              setView({ n: "detail", id })
+            }}
           />
         )}
         {view.n === "profil" && (
           <ProfilSopir
             profile={profile}
-            setProfile={setProfile}
+            setProfile={(p) => {
+              setProfile(p)
+              if (typeof window !== "undefined") {
+                try {
+                  localStorage.setItem("damri_driver_profile", JSON.stringify(p))
+                } catch {}
+              }
+            }}
             password={password}
             setPassword={setPassword}
             offline={offline}
@@ -78,10 +120,11 @@ export default function Driver({
           <InputKeberangkatan
             deps={deps}
             offline={offline}
-            onCancel={() => setView({ n: "list" })}
+            onCancel={() => setView({ n: lastTabRef.current })}
             onSave={(d) => {
               setDeps((p) => [d, ...p])
               setView({ n: "detail", id: d.id })
+              toast("Berhasil disimpan")
             }}
           />
         )}
@@ -90,17 +133,21 @@ export default function Driver({
             key={view.id}
             dep={deps.find((d) => d.id === view.id)!}
             offline={offline}
-            onBack={() => setView({ n: "list" })}
+            onBack={() => setView({ n: lastTabRef.current })}
             onSave={(d) => {
               setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
-              setView({ n: "list" })
+              setView({ n: lastTabRef.current })
+              toast("Berhasil disimpan")
             }}
             onSubmit={(d) => {
               setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
               submitted(d)
               setView({ n: "success" })
               setTimeout(
-                () => setView((v) => (v.n === "success" ? { n: "list" } : v)),
+                () =>
+                  setView((v) =>
+                    v.n === "success" ? { n: lastTabRef.current } : v,
+                  ),
                 2200,
               )
             }}
@@ -129,13 +176,28 @@ export default function Driver({
       )}
 
       {showNav && (
-        <nav className="fixed bottom-0 left-1/2 z-40 grid w-full max-w-md -translate-x-1/2 grid-cols-2 border-t border-line bg-white pb-2">
+        <nav className="fixed bottom-0 left-1/2 z-40 grid w-full max-w-md -translate-x-1/2 grid-cols-3 border-t border-line bg-white pb-2 shadow-lg">
           {[
             {
               k: "list",
               l: "Keberangkatan",
               i: <List size={22} />,
               v: { n: "list" } as View,
+            },
+            {
+              k: "riwayat",
+              l: "Riwayat",
+              i: (
+                <span className="relative inline-flex items-center justify-center">
+                  <History size={22} />
+                  {pendingRevisions > 0 && (
+                    <span className="absolute -right-2 -top-1 grid size-4 place-items-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-xs">
+                      {pendingRevisions}
+                    </span>
+                  )}
+                </span>
+              ),
+              v: { n: "riwayat" } as View,
             },
             {
               k: "profil",

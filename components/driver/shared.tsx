@@ -6,7 +6,12 @@ import { cx } from "@/components/ui"
 export const logoDamri = "/assets/logo-damri.png"
 export const logoDamriFull = "/assets/logo-damri-full.png"
 
-export type DriverProfile = { nama: string; email: string; telepon: string }
+export type DriverProfile = {
+  nama: string
+  email: string
+  telepon: string
+  foto?: string
+}
 
 export const DRIVER_PHOTO =
   "https://images.unsplash.com/photo-1649768870222-17848797d6b4?crop=faces&fit=crop&h=240&w=240&auto=format&q=85"

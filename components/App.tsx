@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import Driver from "./Driver"
 import Coordinator from "./Coordinator"
 import FormLogin from "./auth/FormLogin"
-import { OfflineBanner, Toasts } from "./ui"
+import { OfflineBanner, Toasts, type ToastItem, type ToastType } from "./ui"
 import { INCOMING, ME, SEED, Departure, jalur, uid } from "@/lib/data"
 import type { Role } from "@/types"
 
@@ -14,14 +14,14 @@ export default function App() {
   const [offline, setOffline] = useState(() =>
     typeof navigator !== "undefined" ? !navigator.onLine : false,
   )
-  const [toasts, setToasts] = useState<{ id: number; text: string }[]>([])
+  const [toasts, setToasts] = useState<ToastItem[]>([])
   const tid = useRef(0)
   const incoming = useRef(0)
 
-  const toast = useCallback((text: string) => {
+  const toast = useCallback((text: string, type?: ToastType) => {
     const id = ++tid.current
-    setToasts((t) => [...t, { id, text }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500)
+    setToasts((t) => [...t, { id, text, type }])
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800)
   }, [])
 
   const approveMine = useCallback(
@@ -29,7 +29,7 @@ export default function App() {
       setDeps((p) => {
         const d = p.find((x) => x.id === id)
         if (!d || d.status !== "dikirim") return p
-        toast(`Keberangkatan ${jalur(d.jalurId).nama} disetujui`)
+
         return p.map((x) => (x.id === id ? { ...x, status: "disetujui" } : x))
       })
     },
@@ -66,7 +66,7 @@ export default function App() {
   return (
     <>
       {offline && role && <OfflineBanner />}
-      <Toasts items={toasts} />
+      <Toasts items={toasts} onClear={() => setToasts([])} />
       {!role && <FormLogin onLogin={setRole} />}
       {role === "sopir" && (
         <Driver

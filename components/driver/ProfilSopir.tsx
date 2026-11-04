@@ -1,14 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import {
   Bus,
+  Camera,
   ChevronRight,
   KeyRound,
   LogOut,
   Mail,
   Pencil,
   Phone,
+  Trash2,
   User,
 } from "lucide-react"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
@@ -16,18 +18,30 @@ import { DRIVER_PHOTO, DamriWordmark, type DriverProfile } from "./shared"
 
 interface Props {
   profile: DriverProfile
-  setProfile: React.Dispatch<React.SetStateAction<DriverProfile>>
+  setProfile: (p: DriverProfile) => void
   password: string
   setPassword: React.Dispatch<React.SetStateAction<string>>
   offline: boolean
-  toast: (t: string) => void
+  toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   count: number
 }
-export default function ProfilSopir({ profile, setProfile, password, setPassword, offline, toast, onLogout, count }: Props) {
+
+export default function ProfilSopir({
+  profile,
+  setProfile,
+  password,
+  setPassword,
+  offline,
+  toast,
+  onLogout,
+  count,
+}: Props) {
   const [editOpen, setEditOpen] = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
+  const [logoutDialog, setLogoutDialog] = useState(false)
   const [draft, setDraft] = useState(profile)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [passwordForm, setPasswordForm] = useState({
     current: "",
     next: "",
@@ -45,6 +59,32 @@ export default function ProfilSopir({ profile, setProfile, password, setPassword
     setPasswordForm({ current: "", next: "", confirm: "" })
     setPasswordError("")
     setPasswordOpen(true)
+  }
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      toast("Format file harus berupa gambar", "error")
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast("Ukuran foto maksimal 5 MB", "error")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const result = event.target?.result as string
+      if (result) {
+        setDraft((curr) => ({ ...curr, foto: result }))
+        toast("Foto berhasil dipilih. Klik 'Simpan perubahan' untuk menerapkan.")
+      }
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
   }
 
   return (
@@ -65,10 +105,18 @@ export default function ProfilSopir({ profile, setProfile, password, setPassword
         <div className="relative mt-6 flex items-center gap-4">
           <span className="relative shrink-0">
             <img
-              src={DRIVER_PHOTO}
+              src={profile.foto || DRIVER_PHOTO}
               alt={`Foto profil ${profile.nama}`}
               className="size-20 rounded-2xl border-2 border-white/80 object-cover shadow-lg"
             />
+            <button
+              type="button"
+              onClick={openEdit}
+              title="Ganti foto profil"
+              className="absolute -bottom-2 -left-2 grid size-7 place-items-center rounded-lg border border-line bg-white text-navy shadow-md transition hover:bg-navy-50"
+            >
+              <Camera size={14} />
+            </button>
             <span
               className={cx(
                 "absolute -bottom-1 -right-1 size-4 rounded-full border-[3px] border-navy",
@@ -140,7 +188,7 @@ export default function ProfilSopir({ profile, setProfile, password, setPassword
             <span className="flex-1">
               <span className="block text-sm font-semibold">Edit profil</span>
               <span className="block text-xs text-mute">
-                Ubah nama dan informasi kontak
+                Ubah nama, kontak & foto
               </span>
             </span>
             <ChevronRight size={18} className="text-mute" />
@@ -167,7 +215,7 @@ export default function ProfilSopir({ profile, setProfile, password, setPassword
         <Btn
           variant="outline"
           className="w-full text-red-700"
-          onClick={onLogout}
+          onClick={() => setLogoutDialog(true)}
         >
           <LogOut size={18} /> Keluar dari akun
         </Btn>
@@ -188,9 +236,10 @@ export default function ProfilSopir({ profile, setProfile, password, setPassword
                   nama: draft.nama.trim() || profile.nama,
                   email: draft.email.trim() || profile.email,
                   telepon: draft.telepon.trim(),
+                  foto: draft.foto || profile.foto || DRIVER_PHOTO,
                 })
                 setEditOpen(false)
-                toast("Profil berhasil diperbarui")
+                toast("Profil & foto berhasil diperbarui")
               }}
             >
               Simpan perubahan
@@ -199,17 +248,57 @@ export default function ProfilSopir({ profile, setProfile, password, setPassword
         }
       >
         <div className="space-y-5">
-          <div className="flex items-center gap-4 rounded-xl bg-wash p-3">
-            <img
-              src={DRIVER_PHOTO}
-              alt=""
-              className="size-16 rounded-xl object-cover"
-            />
-            <div>
-              <p className="font-semibold text-ink">
+          <div className="flex items-center gap-4 rounded-xl bg-wash p-3.5">
+            <div className="relative group shrink-0">
+              <img
+                src={draft.foto || DRIVER_PHOTO}
+                alt=""
+                className="size-16 rounded-full object-cover ring-2 ring-white shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Ganti foto profil"
+                className="absolute inset-0 flex items-center justify-center rounded-full bg-navy/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              >
+                <Camera size={20} />
+              </button>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-ink">
                 {draft.nama || profile.nama}
               </p>
               <p className="text-xs text-mute">Sopir DAMRI</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs font-semibold text-navy shadow-xs transition hover:bg-navy-50"
+                >
+                  <Camera size={13} /> Ganti foto
+                </button>
+                {draft.foto && draft.foto !== DRIVER_PHOTO && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((curr) => ({
+                        ...curr,
+                        foto: DRIVER_PHOTO,
+                      }))
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                  >
+                    <Trash2 size={12} /> Hapus foto
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <Field label="Nama lengkap">
@@ -330,6 +419,34 @@ export default function ProfilSopir({ profile, setProfile, password, setPassword
             />
           </Field>
         </div>
+      </Dialog>
+
+      <Dialog
+        open={logoutDialog}
+        onClose={() => setLogoutDialog(false)}
+        title="Keluar dari akun?"
+        actions={
+          <>
+            <Btn variant="outline" onClick={() => setLogoutDialog(false)}>
+              Batal
+            </Btn>
+            <Btn
+              variant="danger"
+              onClick={() => {
+                setLogoutDialog(false)
+                toast("Berhasil keluar dari akun")
+                onLogout()
+              }}
+            >
+              Ya, keluar
+            </Btn>
+          </>
+        }
+      >
+        <p>
+          Apakah Anda yakin ingin keluar dari akun Sopir ({profile.nama})? Pastikan seluruh
+          pencatatan dan keberangkatan Anda telah tersimpan sebelum mengakhiri sesi ini.
+        </p>
       </Dialog>
     </>
   )

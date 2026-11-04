@@ -31,7 +31,7 @@ import { Title, th, td, tableWrap, type Page } from "./shared"
 interface Props {
   deps: Departure[]
   setDeps: React.Dispatch<React.SetStateAction<Departure[]>>
-  toast: (t: string) => void
+  toast: (t: string, type?: "success" | "error") => void
   go: (p: Page) => void
   clearNew: () => void
 }
@@ -95,7 +95,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
     setRej(null)
     setOpen(null)
     setNote("")
-    toast("Dikembalikan ke draft sopir")
+    toast("Keberangkatan ditolak & dikembalikan ke draft", "error")
   }
   const detail = deps.find((d) => d.id === open)
 

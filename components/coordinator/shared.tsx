@@ -17,6 +17,12 @@ export const th =
   "whitespace-nowrap px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-mute"
 export const td = "px-4 py-3 text-sm"
 export const tableWrap = "overflow-x-auto rounded-xl border border-line"
+export type CoordinatorProfile = {
+  nama: string
+  email: string
+  telepon: string
+  foto?: string
+}
 export const PROFILE_PHOTO =
   "https://images.unsplash.com/photo-1573497019236-17f8177b81e8?crop=faces&fit=crop&h=160&w=160&auto=format&q=85"
 

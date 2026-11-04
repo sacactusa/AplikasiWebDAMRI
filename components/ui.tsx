@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import { AlertTriangle, CheckCircle2, Lock, X, Inbox } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Lock, X, Inbox, XCircle } from "lucide-react"
 import type { Status } from "@/lib/data"
 
 const logoDamri = "/assets/logo-damri.png"
@@ -12,9 +12,11 @@ export const cx = (...a: (string | false | undefined | null)[]) =>
 export function StatusBadge({
   status,
   rejected,
+  label: customLabel,
 }: {
   status: Status
   rejected?: boolean
+  label?: string
 }) {
   const map = {
     draft: ["Draft", "bg-slate-100 text-slate-700 border-slate-200"],
@@ -24,7 +26,8 @@ export function StatusBadge({
       "bg-emerald-50 text-emerald-800 border-emerald-200",
     ],
   } as const
-  const [label, cls] = map[status]
+  const [defaultLabel, cls] = map[status]
+  const label = customLabel ?? defaultLabel
   return (
     <span className="inline-flex items-center gap-1.5">
       <span
@@ -93,7 +96,7 @@ export function Dialog({
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/40 p-4 sm:items-center"
+      className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/30 backdrop-blur-sm p-4 sm:items-center"
       onClick={onClose}
     >
       <div
@@ -135,7 +138,7 @@ export function Drawer({
 }) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-[60] bg-ink/30" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] bg-slate-900/25 backdrop-blur-xs" onClick={onClose}>
       <aside
         className="slidein absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -182,18 +185,54 @@ export function Empty({
   )
 }
 
-export function Toasts({ items }: { items: { id: number; text: string }[] }) {
+export type ToastType = "success" | "error"
+
+export interface ToastItem {
+  id: number
+  text: string
+  type?: ToastType
+}
+
+export function Toasts({
+  items,
+  onClear,
+}: {
+  items: ToastItem[]
+  onClear?: () => void
+}) {
+  if (items.length === 0) return null
+
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-[90] flex flex-col items-center gap-2 bg-white px-4">
-      {items.map((t) => (
-        <div
-          key={t.id}
-          className="rise pointer-events-auto flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-medium text-white shadow-lg"
-        >
-          <CheckCircle2 size={16} className="text-emerald-400" />
-          {t.text}
-        </div>
-      ))}
+    <div className="pointer-events-none fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 p-4">
+      {items.map((t) => {
+        const isError =
+          t.type === "error" ||
+          (!t.type &&
+            /(gagal|salah|error|tidak|batal|belum|harus|maksimal|minimal|tolak)/i.test(
+              t.text,
+            ))
+
+        return (
+          <div
+            key={t.id}
+            onClick={onClear}
+            className="pop pointer-events-auto flex w-64 sm:w-72 min-h-56 sm:min-h-60 flex-col items-center justify-center rounded-3xl border border-white/80 bg-white/75 p-6 text-center text-ink shadow-2xl shadow-slate-900/15 backdrop-blur-xl ring-1 ring-black/10 cursor-pointer"
+          >
+            <div className="mb-4">
+              {isError ? (
+                <span className="grid size-20 place-items-center rounded-full bg-red-100 text-red-600 ring-4 ring-red-50 shadow-md shadow-red-500/10">
+                  <XCircle size={48} strokeWidth={2.2} />
+                </span>
+              ) : (
+                <span className="grid size-20 place-items-center rounded-full bg-emerald-100 text-emerald-600 ring-4 ring-emerald-50 shadow-md shadow-emerald-500/10">
+                  <CheckCircle2 size={48} strokeWidth={2.2} />
+                </span>
+              )}
+            </div>
+            <p className="text-base sm:text-lg font-bold leading-snug text-ink">{t.text}</p>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -386,4 +425,3 @@ export function Logo({ light }: { light?: boolean }) {
     </div>
   )
 }
-

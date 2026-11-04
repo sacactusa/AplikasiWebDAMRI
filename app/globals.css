@@ -87,6 +87,19 @@ textarea:focus-visible {
 .rise {
   animation: rise 0.22s ease-out;
 }
+@keyframes pop {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.pop {
+  animation: pop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 
 /* Sembunyikan Next.js dev indicator badge */
