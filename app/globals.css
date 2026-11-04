@@ -8,6 +8,8 @@
   --color-ink: #0b1b33;
   --color-navy: #0a2a66;
   --color-navy-700: #123a85;
+  --color-navy-800: #082154;
+  --color-navy-900: #06173a;
   --color-navy-50: #eef3fb;
   --color-line: #e4e8ef;
   --color-mute: #5b6677;
@@ -19,29 +21,41 @@ body,
 #root {
   min-height: 100%;
 }
+
 body {
   font-family: var(--font-sans);
   color: var(--color-ink);
   background: #fff;
   -webkit-font-smoothing: antialiased;
 }
+
 ::selection {
   background: #cfdcf5;
 }
+
 .font-serif {
   font-weight: 600;
   letter-spacing: -0.02em;
 }
+
 .num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
 * {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Sembunyikan scrollbar pada elemen horizontal swipe */
+.no-scrollbar {
   scrollbar-width: none;
 }
-*::-webkit-scrollbar {
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -61,6 +75,7 @@ textarea:focus-visible {
 .row-new {
   animation: flash 3s ease-out;
 }
+
 @keyframes slidein {
   from {
     transform: translateX(24px);
@@ -74,6 +89,7 @@ textarea:focus-visible {
 .slidein {
   animation: slidein 0.22s ease-out;
 }
+
 @keyframes rise {
   from {
     transform: translateY(12px);
@@ -87,7 +103,19 @@ textarea:focus-visible {
 .rise {
   animation: rise 0.22s ease-out;
 }
-
+@keyframes pop {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.pop {
+  animation: pop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 /* Sembunyikan Next.js dev indicator badge */
 nextjs-portal,

@@ -147,17 +147,20 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
   )
 
   return (
-    <div className="relative grid min-h-screen lg:grid-cols-[2fr_3fr]">
-      <img
-        src={busDamriPutih}
-        alt="Bus putih DAMRI"
-        className="fixed inset-0 -z-10 size-full object-cover"
-      />
-      <div
-        aria-hidden
-        className="fixed inset-0 -z-10 bg-gradient-to-t from-navy/80 via-navy/45 to-navy/25 lg:from-navy/90 lg:via-navy/60 lg:to-navy/40"
-      />
-      <section className="relative hidden flex-col justify-between overflow-hidden p-10 text-white lg:flex">
+    <div className="relative grid min-h-screen overflow-hidden lg:grid-cols-[2fr_3fr]">
+      <div className="absolute inset-0 z-0">
+        <img
+          src={busDamriPutih}
+          alt="Bus putih DAMRI"
+          className="size-full object-cover"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-t from-navy/85 via-navy/55 to-navy/35 lg:from-navy/95 lg:via-navy/70 lg:to-navy/50"
+        />
+      </div>
+
+      <section className="relative z-10 hidden flex-col justify-between overflow-hidden p-10 text-white lg:flex">
         <svg
           aria-hidden
           className="absolute inset-x-0 bottom-40 w-full text-white/30"
@@ -201,11 +204,11 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
         </div>
       </section>
 
-      <section className="flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
+      <section className="relative z-10 flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
         <div
           className={cx(
-            "w-full max-w-xl space-y-5 rounded-2xl border border-white/25 bg-navy/65 p-5 text-white shadow-xl backdrop-blur-md sm:p-8",
-            "[&_input]:text-ink [&_label>span:last-child]:text-white/65",
+            "w-full max-w-xl space-y-5 rounded-2xl border border-white/25 bg-navy/75 p-5 text-white shadow-2xl backdrop-blur-xl sm:p-8",
+            "[&_input]:text-ink [&_label>span:first-child]:!text-white [&_label>span:last-child]:text-white/75",
           )}
         >
           <div className="lg:hidden">
@@ -215,7 +218,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
           {step === "pilih" && (
             <div className="rise space-y-5">
               <div>
-                <h2 className="font-serif text-4xl">Selamat datang</h2>
+                <h2 className="font-serif text-4xl text-white">Selamat datang</h2>
                 <p className="mt-1 text-sm text-white/70">
                   Pilih peran Anda terlebih dahulu agar kami menampilkan halaman
                   yang sesuai.
@@ -274,7 +277,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 <ArrowLeft size={16} /> Kembali
               </button>
               <div>
-                <h2 className="font-serif text-4xl">Masuk</h2>
+                <h2 className="font-serif text-4xl text-white">Masuk</h2>
                 <p className="mt-1 text-sm text-white/70">{R.desc}</p>
               </div>
               {roleSwitch}
@@ -284,7 +287,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 </p>
               )}
               {errBox}
-              <Field label="Email / username">
+              <Field light label="Email / username">
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -293,7 +296,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                   className={inputCls(!!error)}
                 />
               </Field>
-              <Field label="Kata sandi">{pwInput(pw, setPw, true)}</Field>
+              <Field light label="Kata sandi">{pwInput(pw, setPw, true)}</Field>
               <Btn type="submit" variant="brand" className="h-12 w-full">
                 Masuk sebagai {R.label}
               </Btn>
@@ -342,7 +345,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 <ArrowLeft size={16} /> Kembali
               </button>
               <div>
-                <h2 className="font-serif text-4xl">Buat akun</h2>
+                <h2 className="font-serif text-4xl text-white">Buat akun</h2>
                 <p className="mt-1 text-sm text-white/70">
                   Pilih peran yang sesuai dengan tugas Anda di DAMRI.
                 </p>
@@ -352,7 +355,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 <b>{R.label}:</b> {R.desc}
               </p>
               {errBox}
-              <Field label="Nama lengkap">
+              <Field light label="Nama lengkap">
                 <input
                   value={nama}
                   onChange={(e) => setNama(e.target.value)}
@@ -361,7 +364,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                   className={inputCls()}
                 />
               </Field>
-              <Field label="Email">
+              <Field light label="Email">
                 <input
                   type="email"
                   value={email}
@@ -371,14 +374,15 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                   className={inputCls()}
                 />
               </Field>
-              <Field label="Kata sandi" hint="Minimal 6 karakter">
+              <Field light label="Kata sandi" hint="Minimal 6 karakter">
                 {pwInput(pw, setPw, false)}
               </Field>
-              <Field label="Ulangi kata sandi">
+              <Field light label="Ulangi kata sandi">
                 {pwInput(pw2, setPw2, false)}
               </Field>
               {role === "koordinator" && (
                 <Field
+                  light
                   label="Kode registrasi koordinator"
                   hint="Diberikan oleh admin cabang. Demo: DAMRI-KOORD"
                 >

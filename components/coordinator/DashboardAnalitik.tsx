@@ -68,15 +68,15 @@ export default function DashboardAnalitik({ deps, go }: Props) {
     <>
       <Title
         sub="Hanya keberangkatan berstatus Disetujui yang dihitung."
-        right={
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <div className="flex items-center gap-3 rounded-xl border border-line bg-white px-4 py-2.5 shadow-sm">
-              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy">
-                <Clock3 size={18} />
+                right={
+          <div className="flex w-full items-center gap-2.5 sm:w-auto">
+            <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-white px-3 shadow-2xs sm:w-auto sm:flex-initial sm:px-3.5">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy">
+                <Clock3 size={15} />
               </span>
-              <LiveDateTime align="right" />
+              <LiveDateTime compact />
             </div>
-            <Btn onClick={() => go("laporan")}>
+            <Btn onClick={() => go("laporan")} className="h-11 shrink-0 px-4">
               <Download size={16} /> Ekspor
             </Btn>
           </div>

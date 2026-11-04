@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { AUDIT } from "@/lib/data"
-import { Drawer, Empty, cx, inputCls } from "@/components/ui"
+import { DateInput, Drawer, Empty, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
 
 export default function AuditLog() {
@@ -31,19 +31,17 @@ export default function AuditLog() {
         Audit Log
       </Title>
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <input
-          type="date"
+                <DateInput
           aria-label="Dari tanggal"
+          placeholder="Dari (dd/mm/yyyy)"
           value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className={cx(inputCls(), "num h-11")}
+          onChange={setFrom}
         />
-        <input
-          type="date"
+        <DateInput
           aria-label="Sampai tanggal"
+          placeholder="Sampai (dd/mm/yyyy)"
           value={until}
-          onChange={(e) => setUntil(e.target.value)}
-          className={cx(inputCls(), "num h-11")}
+          onChange={setUntil}
         />
         <select
           aria-label="Pengguna"

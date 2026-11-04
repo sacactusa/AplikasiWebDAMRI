@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react"
 import type { Departure } from "@/lib/data"
 import { calc, TODAY } from "@/lib/data"
-import { cx, inputCls } from "@/components/ui"
+import { DateInput, cx, inputCls } from "@/components/ui"
 
 export type Page =
   | "verifikasi"
@@ -69,7 +69,7 @@ export function RangePicker({ r }: { r: ReturnType<typeof useRange> }) {
     <div className="flex flex-wrap items-center gap-3">
       <div
         role="tablist"
-        className="inline-flex rounded-lg border border-line bg-wash p-1"
+        className="inline-flex max-w-full overflow-x-auto no-scrollbar rounded-lg border border-line bg-wash p-1"
       >
         {(["harian", "mingguan", "bulanan", "rentang"] as Mode[]).map((m) => (
           <button
@@ -78,7 +78,7 @@ export function RangePicker({ r }: { r: ReturnType<typeof useRange> }) {
             aria-selected={r.mode === m}
             onClick={() => r.setMode(m)}
             className={cx(
-              "h-9 rounded-md px-3.5 text-sm font-semibold capitalize transition",
+              "h-9 shrink-0 rounded-md px-3 text-xs sm:px-3.5 sm:text-sm font-semibold capitalize transition",
               r.mode === m ? "bg-white text-navy shadow-sm" : "text-mute",
             )}
           >
@@ -86,22 +86,20 @@ export function RangePicker({ r }: { r: ReturnType<typeof useRange> }) {
           </button>
         ))}
       </div>
-      <input
-        type="date"
+      <DateInput
         aria-label="Tanggal"
         value={r.anchor}
-        onChange={(e) => r.setAnchor(e.target.value)}
-        className={cx(inputCls(), "num h-11 w-auto")}
+        onChange={r.setAnchor}
+        className="w-auto min-w-[140px]"
       />
       {r.mode === "rentang" && (
         <>
           <span className="text-mute">s/d</span>
-          <input
-            type="date"
+          <DateInput
             aria-label="Sampai"
             value={r.to}
-            onChange={(e) => r.setTo(e.target.value)}
-            className={cx(inputCls(), "num h-11 w-auto")}
+            onChange={r.setTo}
+            className="w-auto min-w-[140px]"
           />
         </>
       )}

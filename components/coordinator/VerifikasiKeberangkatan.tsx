@@ -18,6 +18,7 @@ import {
 } from "@/lib/data"
 import {
   Btn,
+  DateInput,
   Dialog,
   Drawer,
   Empty,
@@ -143,12 +144,11 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <input
-          type="date"
+                <DateInput
           aria-label="Tanggal"
+          placeholder="dd/mm/yyyy"
           value={fd}
-          onChange={(e) => setFd(e.target.value)}
-          className={cx(inputCls(), "num h-11")}
+          onChange={setFd}
         />
         <select
           aria-label="Segmen"
@@ -290,7 +290,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
       )}
 
       {(selIds.length > 0 || (scoped && rows.length > 1)) && (
-        <div className="rise fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-2xl flex-wrap items-center gap-3 rounded-2xl bg-ink p-3 pl-5 text-white shadow-2xl">
+        <div className="rise fixed inset-x-4 bottom-6 z-40 mx-auto flex max-w-2xl flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-navy-900/95 p-3.5 pl-5 text-white shadow-2xl backdrop-blur-md lg:left-[calc(16rem+1rem)] lg:right-6 lg:mx-auto">
           <span className="text-sm font-semibold">{selIds.length} dipilih</span>
           {scoped && !allSel && (
             <button

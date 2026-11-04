@@ -7,7 +7,6 @@ import {
   Database,
   FileSpreadsheet,
   LayoutDashboard,
-  LogOut,
   Menu,
   ScrollText,
   Users,
@@ -46,6 +45,7 @@ export default function Coordinator({
   const [menu, setMenu] = useState(false)
   const [profileDialog, setProfileDialog] = useState(false)
   const [passwordDialog, setPasswordDialog] = useState(false)
+  const [logoutDialog, setLogoutDialog] = useState(false)
   const [profile, setProfile] = useState({
     nama: "Rina Marlina",
     email: "koordinator@damri.co.id",
@@ -73,9 +73,18 @@ export default function Coordinator({
   ]
 
   const nav = (
-    <div className="flex h-full flex-col bg-gradient-to-b from-navy to-[#06173a] p-4 text-white">
-      <div className="mb-8 mt-1 px-2">
+    <div className="flex h-full flex-col bg-gradient-to-b from-navy to-navy-900 p-4 text-white">
+      <div className="mb-6 mt-1 flex items-center justify-between px-2">
         <Logo light />
+        {menu && (
+          <button
+            onClick={() => setMenu(false)}
+            aria-label="Tutup menu"
+            className="rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
       <nav className="space-y-1">
         {items.map(([k, l, i]) => (
@@ -157,26 +166,22 @@ export default function Coordinator({
             </p>
           </div>
         </button>
-        <button
-          onClick={onLogout}
-          className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/10 hover:text-white"
-        >
-          <LogOut size={16} /> Keluar
-        </button>
       </div>
     </div>
   )
 
   return (
     <div className="flex min-h-screen bg-wash text-ink">
-      <aside className="hidden w-64 shrink-0 lg:block">{nav}</aside>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-navy-900/20 bg-navy shadow-sm lg:block">
+        {nav}
+      </aside>
       {menu && (
         <div
-          className="fixed inset-0 z-50 bg-ink/40 lg:hidden"
+          className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-xs transition-opacity lg:hidden"
           onClick={() => setMenu(false)}
         >
           <div
-            className="h-full w-72 max-w-[80vw]"
+            className="h-full w-72 max-w-[85vw] shadow-2xl animate-in slide-in-from-left duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {nav}
@@ -184,17 +189,17 @@ export default function Coordinator({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-line bg-white px-4 lg:hidden">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-white/95 px-4 backdrop-blur-md shadow-2xs lg:hidden">
           <button
             aria-label="Buka menu navigasi"
             onClick={() => setMenu(true)}
-            className="grid size-10 place-items-center rounded-lg hover:bg-wash"
+            className="grid size-10 place-items-center rounded-lg text-navy hover:bg-wash active:scale-95 transition"
           >
             <Menu size={22} />
           </button>
           <Logo />
         </header>
-        <main className="mx-auto max-w-[1180px] px-4 py-6 sm:px-8 sm:py-10">
+        <main className="w-full max-w-[1280px] mx-auto px-4 py-6 sm:px-8 sm:py-8 flex-1 min-w-0">
           {page === "verifikasi" && (
             <VerifikasiKeberangkatan
               deps={deps}
@@ -227,7 +232,7 @@ export default function Coordinator({
                 setPasswordError("")
                 setPasswordDialog(true)
               }}
-              onLogout={onLogout}
+              onLogout={() => setLogoutDialog(true)}
             />
           )}
         </main>
@@ -397,6 +402,33 @@ export default function Coordinator({
             />
           </Field>
         </div>
+      </Dialog>
+      <Dialog
+        open={logoutDialog}
+        onClose={() => setLogoutDialog(false)}
+        title="Keluar dari akun?"
+        actions={
+          <>
+            <Btn variant="outline" onClick={() => setLogoutDialog(false)}>
+              Batal
+            </Btn>
+            <Btn
+              variant="danger"
+              onClick={() => {
+                setLogoutDialog(false)
+                onLogout()
+              }}
+            >
+              Ya, keluar
+            </Btn>
+          </>
+        }
+      >
+        <p>
+          Apakah Anda yakin ingin keluar dari akun Koordinator ({profile.nama})? Pastikan seluruh
+          pemeriksaan dan perubahan data operasional telah disimpan sebelum
+          mengakhiri sesi ini.
+        </p>
       </Dialog>
     </div>
   )
