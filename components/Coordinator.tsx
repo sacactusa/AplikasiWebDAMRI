@@ -1,20 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Archive,
+  Camera,
   ClipboardCheck,
   Database,
   FileSpreadsheet,
   LayoutDashboard,
   Menu,
   ScrollText,
+  Trash2,
   Users,
   X,
 } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { Btn, Dialog, Field, Logo, cx, inputCls } from "@/components/ui"
-import { PROFILE_PHOTO, type Page } from "./coordinator/shared"
+import { PROFILE_PHOTO, type CoordinatorProfile, type Page } from "./coordinator/shared"
 import VerifikasiKeberangkatan from "./coordinator/VerifikasiKeberangkatan"
 import DashboardAnalitik from "./coordinator/DashboardAnalitik"
 import LaporanOperasional from "./coordinator/LaporanOperasional"
@@ -28,7 +30,7 @@ interface Props {
   deps: Departure[]
   setDeps: React.Dispatch<React.SetStateAction<Departure[]>>
   offline: boolean
-  toast: (t: string) => void
+  toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   clearNew: () => void
 }
@@ -46,12 +48,22 @@ export default function Coordinator({
   const [profileDialog, setProfileDialog] = useState(false)
   const [passwordDialog, setPasswordDialog] = useState(false)
   const [logoutDialog, setLogoutDialog] = useState(false)
-  const [profile, setProfile] = useState({
-    nama: "Rina Marlina",
-    email: "koordinator@damri.co.id",
-    telepon: "0812 3456 7890",
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [profile, setProfile] = useState<CoordinatorProfile>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("damri_coord_profile")
+        if (saved) return JSON.parse(saved)
+      } catch {}
+    }
+    return {
+      nama: "Rina Marlina",
+      email: "koordinator@damri.co.id",
+      telepon: "0812 3456 7890",
+      foto: PROFILE_PHOTO,
+    }
   })
-  const [profileDraft, setProfileDraft] = useState(profile)
+  const [profileDraft, setProfileDraft] = useState<CoordinatorProfile>(profile)
   const [password, setPassword] = useState("damri123")
   const [passwordForm, setPasswordForm] = useState({
     current: "",
@@ -61,6 +73,36 @@ export default function Coordinator({
   const [passwordError, setPasswordError] = useState("")
   const waiting = deps.filter((d) => d.status === "dikirim").length
   const online = !offline
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" })
+  }, [page])
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      toast("Format file harus berupa gambar", "error")
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast("Ukuran foto maksimal 5 MB", "error")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const result = event.target?.result as string
+      if (result) {
+        setProfileDraft((curr) => ({ ...curr, foto: result }))
+        toast("Foto berhasil dipilih. Klik 'Simpan perubahan' untuk menerapkan.")
+      }
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
 
   const items: [Page, string, React.ReactNode][] = [
     ["verifikasi", "Verifikasi", <ClipboardCheck size={18} key="v" />],
@@ -135,9 +177,9 @@ export default function Coordinator({
         >
           <span className="relative shrink-0">
             <img
-              src={PROFILE_PHOTO}
+              src={profile.foto || PROFILE_PHOTO}
               alt=""
-              className="size-10 rounded-xl object-cover"
+              className="size-10 rounded-full object-cover"
             />
             <span
               className={cx(
@@ -243,16 +285,29 @@ export default function Coordinator({
         title="Edit profil"
         actions={
           <>
-            <Btn variant="ghost" onClick={() => setProfileDialog(false)}>
+            <Btn
+              variant="ghost"
+              onClick={() => {
+                setProfileDialog(false)
+                setProfileDraft(profile)
+              }}
+            >
               Batal
             </Btn>
             <Btn
               onClick={() => {
-                setProfile({
+                const updated: CoordinatorProfile = {
                   nama: profileDraft.nama.trim() || profile.nama,
                   email: profileDraft.email.trim() || profile.email,
                   telepon: profileDraft.telepon.trim(),
-                })
+                  foto: profileDraft.foto || profile.foto || PROFILE_PHOTO,
+                }
+                setProfile(updated)
+                if (typeof window !== "undefined") {
+                  try {
+                    localStorage.setItem("damri_coord_profile", JSON.stringify(updated))
+                  } catch {}
+                }
                 setProfileDialog(false)
                 toast("Profil berhasil diperbarui")
               }}
@@ -263,17 +318,57 @@ export default function Coordinator({
         }
       >
         <div className="space-y-5">
-          <div className="flex items-center gap-4 rounded-xl bg-wash p-3">
-            <img
-              src={PROFILE_PHOTO}
-              alt=""
-              className="size-16 rounded-full object-cover"
-            />
-            <div>
-              <p className="font-semibold text-ink">
+          <div className="flex items-center gap-4 rounded-xl bg-wash p-3.5">
+            <div className="relative group shrink-0">
+              <img
+                src={profileDraft.foto || PROFILE_PHOTO}
+                alt=""
+                className="size-16 rounded-full object-cover ring-2 ring-white shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Ganti foto profil"
+                className="absolute inset-0 flex items-center justify-center rounded-full bg-navy/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              >
+                <Camera size={20} />
+              </button>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-ink">
                 {profileDraft.nama || profile.nama}
               </p>
               <p className="text-xs text-mute">Koordinator (Admin)</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs font-semibold text-navy shadow-xs transition hover:bg-navy-50"
+                >
+                  <Camera size={13} /> Ganti foto
+                </button>
+                {profileDraft.foto && profileDraft.foto !== PROFILE_PHOTO && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setProfileDraft((curr) => ({
+                        ...curr,
+                        foto: PROFILE_PHOTO,
+                      }))
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                  >
+                    <Trash2 size={12} /> Hapus foto
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <Field label="Nama lengkap">
@@ -416,6 +511,7 @@ export default function Coordinator({
               variant="danger"
               onClick={() => {
                 setLogoutDialog(false)
+                toast("Berhasil keluar dari akun")
                 onLogout()
               }}
             >

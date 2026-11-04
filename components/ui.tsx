@@ -12,9 +12,11 @@ export const cx = (...a: (string | false | undefined | null)[]) =>
 export function StatusBadge({
   status,
   rejected,
+  label: customLabel,
 }: {
   status: Status
   rejected?: boolean
+  label?: string
 }) {
   const map = {
     draft: ["Draft", "bg-slate-100 text-slate-700 border-slate-200"],
@@ -24,7 +26,8 @@ export function StatusBadge({
       "bg-emerald-50 text-emerald-800 border-emerald-300",
     ],
   } as const
-  const [label, cls] = map[status]
+  const [defaultLabel, cls] = map[status]
+  const label = customLabel ?? defaultLabel
   return (
     <span className="inline-flex items-center gap-1.5">
       <span

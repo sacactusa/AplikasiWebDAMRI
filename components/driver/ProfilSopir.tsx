@@ -434,6 +434,7 @@ export default function ProfilSopir({
               variant="danger"
               onClick={() => {
                 setLogoutDialog(false)
+                toast("Berhasil keluar dari akun")
                 onLogout()
               }}
             >

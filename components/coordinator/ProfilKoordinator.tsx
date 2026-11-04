@@ -1,13 +1,13 @@
 "use client"
 
-import { ChevronRight, KeyRound, LogOut, Mail, Pencil, Phone } from "lucide-react"
+import { Camera, ChevronRight, KeyRound, LogOut, Mail, Pencil, Phone } from "lucide-react"
 import { Btn, cx } from "@/components/ui"
-import { Title, PROFILE_PHOTO } from "./shared"
+import { Title, PROFILE_PHOTO, type CoordinatorProfile } from "./shared"
 
 const logoDamriFull = "/assets/logo-damri-full.png"
 
 interface Props {
-  profile: { nama: string; email: string; telepon: string }
+  profile: CoordinatorProfile
   online: boolean
   onEdit: () => void
   onPassword: () => void
@@ -29,10 +29,18 @@ export default function ProfilKoordinator({
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
             <span className="relative shrink-0">
               <img
-                src={PROFILE_PHOTO}
+                src={profile.foto || PROFILE_PHOTO}
                 alt={`Foto profil ${profile.nama}`}
                 className="size-24 rounded-2xl border-2 border-white/80 object-cover shadow-lg sm:size-28"
               />
+              <button
+                type="button"
+                onClick={onEdit}
+                title="Ganti foto profil"
+                className="absolute -bottom-2 -left-2 grid size-8 place-items-center rounded-xl border border-line bg-white text-navy shadow-md transition hover:bg-navy-50"
+              >
+                <Camera size={16} />
+              </button>
               <span
                 className={cx(
                   "absolute -bottom-1 -right-1 size-4 rounded-full border-[3px] border-navy",
@@ -99,8 +107,8 @@ export default function ProfilKoordinator({
             <div className="grid gap-3 md:grid-cols-3">
               <Btn
                 variant="outline"
+                className="min-h-20 justify-start gap-3 rounded-xl px-4 text-left hover:bg-wash"
                 onClick={onEdit}
-                className="min-h-20 justify-start gap-3 rounded-xl px-4 text-left"
               >
                 <span className="grid size-10 place-items-center rounded-lg bg-navy-50 text-navy">
                   <Pencil size={18} />
@@ -110,15 +118,15 @@ export default function ProfilKoordinator({
                     Edit profil
                   </span>
                   <span className="block text-xs text-mute">
-                    Ubah nama dan informasi kontak
+                    Ubah nama, kontak & foto
                   </span>
                 </span>
                 <ChevronRight size={18} className="text-mute" />
               </Btn>
               <Btn
                 variant="outline"
+                className="min-h-20 justify-start gap-3 rounded-xl px-4 text-left hover:bg-wash"
                 onClick={onPassword}
-                className="min-h-20 justify-start gap-3 rounded-xl px-4 text-left"
               >
                 <span className="grid size-10 place-items-center rounded-lg bg-navy-50 text-navy">
                   <KeyRound size={18} />
@@ -149,7 +157,7 @@ export default function ProfilKoordinator({
                     Akhiri sesi pada perangkat ini
                   </span>
                 </span>
-                <ChevronRight size={18} className="text-mute" />
+                <ChevronRight size={18} className="text-red-700/60" />
               </Btn>
             </div>
           </div>

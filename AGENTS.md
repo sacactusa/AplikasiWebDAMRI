@@ -22,7 +22,7 @@ This project uses Next.js App Router with modular feature components:
 - `components/auth/`
   - `FormLogin.tsx` - Form login, pemilihan peran, dan pendaftaran koordinator
 - `components/coordinator/`
-  - `ArsipBackup.tsx` - Fitur arsip bulanan & riwayat backup / pemulihan data
+  - `ArsipBackup.tsx` - Fitur arsip bulanan & riwayat backup
   - `VerifikasiKeberangkatan.tsx` - Fitur verifikasi & persetujuan perjalanan bus
   - `DashboardAnalitik.tsx` - Fitur visualisasi analitik & grafik produksi bus
   - `LaporanOperasional.tsx` - Fitur rekapitulasi laporan & ekspor Excel / AK 15

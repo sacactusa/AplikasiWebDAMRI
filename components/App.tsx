@@ -25,22 +25,21 @@ export default function App() {
   }, [])
 
   const handleLogout = useCallback(() => {
-    setRole(null)
     if (typeof window !== "undefined") {
       try {
         sessionStorage.removeItem("damri_auth_session")
         window.history.replaceState(null, "", window.location.pathname)
       } catch {}
     }
-    toast("Berhasil Keluar dari Akun")
-  }, [toast])
+    setRole(null)
+  }, [])
 
   const approveMine = useCallback(
     (id: string) => {
       setDeps((p) => {
         const d = p.find((x) => x.id === id)
         if (!d || d.status !== "dikirim") return p
-        toast(`Keberangkatan ${jalur(d.jalurId).nama} disetujui`)
+
         return p.map((x) => (x.id === id ? { ...x, status: "disetujui" } : x))
       })
     },

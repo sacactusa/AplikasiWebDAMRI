@@ -40,6 +40,10 @@ export default function ManajemenAkun({ toast }: Props) {
   const [add, setAdd] = useState(false)
   const [nu, setNu] = useState({ n: "", e: "", p: "Sopir" })
   const [reset, setReset] = useState<string | null>(null)
+  const [deactivateTarget, setDeactivateTarget] = useState<{
+    n: string
+    e: string
+  } | null>(null)
 
   return (
     <>
@@ -106,11 +110,7 @@ export default function ManajemenAkun({ toast }: Props) {
                     Reset sandi
                   </button>
                   <button
-                    onClick={() =>
-                      setUsers((p) =>
-                        p.map((x, k) => (k === i ? { ...x, a: !x.a } : x)),
-                      )
-                    }
+                    onClick={() => { if (u.a) { setDeactivateTarget({ n: u.n, e: u.e }) } else { setUsers((p) => p.map((x, k) => (k === i ? { ...x, a: true } : x))); toast(`Akun ${u.n} berhasil diaktifkan kembali`) } }}
                     className={cx(
                       "text-sm font-semibold hover:underline",
                       u.a ? "text-red-700" : "text-emerald-700",
@@ -196,6 +196,42 @@ export default function ManajemenAkun({ toast }: Props) {
         }
       >
         Tautan untuk membuat kata sandi baru akan dikirim ke email {reset}.
+      </Dialog>
+      <Dialog
+        open={!!deactivateTarget}
+        danger
+        title="Nonaktifkan akun?"
+        onClose={() => setDeactivateTarget(null)}
+        actions={
+          <>
+            <Btn variant="outline" onClick={() => setDeactivateTarget(null)}>
+              Batal
+            </Btn>
+            <Btn
+              variant="danger"
+              onClick={() => {
+                if (deactivateTarget) {
+                  setUsers((p) =>
+                    p.map((x) =>
+                      x.e === deactivateTarget.e ? { ...x, a: false } : x,
+                    ),
+                  )
+                  toast(`Akun ${deactivateTarget.n} dinonaktifkan`)
+                  setDeactivateTarget(null)
+                }
+              }}
+            >
+              Ya, nonaktifkan
+            </Btn>
+          </>
+        }
+      >
+        <p>
+          Apakah Anda yakin ingin menonaktifkan akun{" "}
+          <b className="font-semibold text-ink">{deactivateTarget?.n}</b>?
+          Pengguna ini tidak akan dapat masuk atau mengakses sistem selama akun
+          dinonaktifkan.
+        </p>
       </Dialog>
     </>
   )

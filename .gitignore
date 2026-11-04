@@ -33,4 +33,5 @@ Thumbs.db
 
 #antigravity
 .antigravity/
-.supabase.tar.gz
+supabase.tar.gz
+*.tar.gz
