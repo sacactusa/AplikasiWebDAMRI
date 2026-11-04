@@ -30,3 +30,7 @@ Thumbs.db
 # Temp & Caches
 .cache/
 .tmp-*
+
+#antigravity
+..antigravity
+.supabase.tar.gz
