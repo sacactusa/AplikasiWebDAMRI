@@ -24,7 +24,7 @@ export type CoordinatorProfile = {
   foto?: string
 }
 export const PROFILE_PHOTO =
-  "https://images.unsplash.com/photo-1573497019236-17f8177b81e8?crop=faces&fit=crop&h=160&w=160&auto=format&q=85"
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect width='128' height='128' fill='%23E2E8F0'/%3E%3Cpath d='M64 68a22 22 0 1 0 0-44 22 22 0 0 0 0 44zm0 10c-24 0-44 14-44 32v6h88v-6c0-18-20-32-44-32z' fill='%2394A3B8'/%3E%3C/svg%3E"
 
 export function Title({
   children,

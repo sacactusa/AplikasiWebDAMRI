@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   FileText,
+  Plus,
 } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { calc, fmtDate, jalur, plat, rupiah, seg } from "@/lib/data"
@@ -18,11 +19,12 @@ interface Props {
   mine: Departure[]
   nama: string
   onOpen: (id: string) => void
+  onAdd?: () => void
 }
 
 type TabFilter = "all" | "draft" | "dikirim" | "revisi" | "disetujui"
 
-export default function DaftarKeberangkatan({ mine, nama, onOpen }: Props) {
+export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd }: Props) {
   const [f, setF] = useState<TabFilter>("all")
 
   // Hitung jumlah keberangkatan berdasarkan masing-masing status
@@ -109,6 +111,15 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen }: Props) {
               Keberangkatan Saya
             </h1>
           </div>
+          {onAdd && (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-amber-400 px-4 py-2 text-xs font-bold text-navy shadow-md transition hover:bg-amber-300 active:scale-95 cursor-pointer"
+            >
+              <Plus size={16} /> Tambah
+            </button>
+          )}
         </div>
 
         {/* Card Status Ringkasan Beranda (Tata Letak Rapi, Seimbang & Vertikal) */}
@@ -320,7 +331,7 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen }: Props) {
           hint={
             f !== "all"
               ? "Tidak ada data pada status ini."
-              : "Ketuk + untuk mencatat keberangkatan baru."
+              : "Ketuk tombol di bawah untuk mencatat keberangkatan baru."
           }
           action={
             f !== "all" ? (
@@ -330,6 +341,14 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen }: Props) {
                 className="inline-flex items-center rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-navy shadow-xs hover:bg-navy-50 cursor-pointer"
               >
                 Tampilkan Semua
+              </button>
+            ) : onAdd ? (
+              <button
+                type="button"
+                onClick={onAdd}
+                className="inline-flex items-center gap-2 rounded-xl bg-navy px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-navy-700 active:scale-95 cursor-pointer"
+              >
+                <Plus size={18} /> Tambah Keberangkatan
               </button>
             ) : undefined
           }

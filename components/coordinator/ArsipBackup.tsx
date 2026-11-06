@@ -1,6 +1,9 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Download } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { formatAuditTime } from "@/lib/supabaseService"
 import { Btn, cx } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
 
@@ -9,19 +12,42 @@ interface Props {
 }
 
 export default function ArsipBackup({ toast }: Props) {
-  const months = [
+  const [months, setMonths] = useState([
     "Oktober 2026 (berjalan)",
     "September 2026",
     "Agustus 2026",
     "Juli 2026",
     "Juni 2026",
-  ]
-  const backups = [
+  ])
+  const [backups, setBackups] = useState([
     { id: "b1", t: "16 Okt 2026 02:00", ok: true, size: "48,6 MB" },
     { id: "b2", t: "15 Okt 2026 02:00", ok: true, size: "48,2 MB" },
     { id: "b3", t: "14 Okt 2026 02:00", ok: false, size: "–" },
     { id: "b4", t: "13 Okt 2026 02:00", ok: true, size: "47,9 MB" },
-  ]
+  ])
+
+  useEffect(() => {
+    supabase.from("backup_log").select("*").order("waktu", { ascending: false }).limit(20).then(({ data }) => {
+      if (data && data.length > 0) {
+        setBackups(data.map((b) => ({
+          id: b.id,
+          t: formatAuditTime(b.waktu),
+          ok: b.berhasil,
+          size: b.ukuran_byte ? (b.ukuran_byte / (1024 * 1024)).toFixed(1) + " MB" : "–"
+        })))
+      }
+    })
+
+    supabase.from("arsip_bulanan").select("*").order("periode", { ascending: false }).limit(12).then(({ data }) => {
+      if (data && data.length > 0) {
+        setMonths(data.map((a) => {
+          const d = new Date(a.periode)
+          const mNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+          return `${mNames[d.getMonth()]} ${d.getFullYear()}`
+        }))
+      }
+    })
+  }, [])
 
   return (
     <>

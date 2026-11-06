@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { supabase } from "@/lib/supabase"
+import { logAudit } from "@/lib/supabaseService"
 import { Plus } from "lucide-react"
 import { DRIVERS } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
@@ -37,6 +39,21 @@ export default function ManajemenAkun({ toast }: Props) {
       a: false,
     },
   ])
+  useEffect(() => {
+    supabase.from("profiles").select("*").order("created_at", { ascending: false }).then(({ data }) => {
+      if (data && data.length > 0) {
+        setUsers(
+          data.map((p) => ({
+            n: p.nama,
+            e: p.email,
+            p: p.role === "koordinator" ? "Koordinator/Admin" : "Sopir",
+            a: p.aktif ?? true,
+          }))
+        )
+      }
+    })
+  }, [])
+
   const [add, setAdd] = useState(false)
   const [nu, setNu] = useState({ n: "", e: "", p: "Sopir" })
   const [reset, setReset] = useState<string | null>(null)
@@ -77,13 +94,29 @@ export default function ManajemenAkun({ toast }: Props) {
                   <select
                     aria-label="Peran"
                     value={u.p}
-                    onChange={(e) =>
+                    onChange={async (e) => {
+                      const newRoleText = e.target.value
+                      const prevRole = u.p
+                      const targetRole = newRoleText.includes("Koordinator") ? "koordinator" : "sopir"
                       setUsers((p) =>
                         p.map((x, k) =>
-                          k === i ? { ...x, p: e.target.value } : x,
+                          k === i ? { ...x, p: newRoleText } : x,
                         ),
                       )
-                    }
+                      try {
+                        await supabase.from("profiles").update({ role: targetRole }).eq("email", u.e)
+                        await logAudit({
+                          user_nama: "Koordinator",
+                          aksi: "Ubah",
+                          tabel: "profiles",
+                          objek: `peran · ${u.n} (${u.e})`,
+                          sebelum: { peran: prevRole },
+                          sesudah: { peran: newRoleText },
+                        })
+                      } catch (err) {
+                        console.warn("Gagal sinkron peran akun ke Supabase:", err)
+                      }
+                    }}
                     className="h-9 rounded-md border border-line bg-white px-2 text-sm"
                   >
                     <option>Sopir</option>
@@ -110,7 +143,27 @@ export default function ManajemenAkun({ toast }: Props) {
                     Reset sandi
                   </button>
                   <button
-                    onClick={() => { if (u.a) { setDeactivateTarget({ n: u.n, e: u.e }) } else { setUsers((p) => p.map((x, k) => (k === i ? { ...x, a: true } : x))); toast(`Akun ${u.n} berhasil diaktifkan kembali`) } }}
+                    onClick={async () => {
+                      if (u.a) {
+                        setDeactivateTarget({ n: u.n, e: u.e })
+                      } else {
+                        setUsers((p) => p.map((x, k) => (k === i ? { ...x, a: true } : x)))
+                        toast(`Akun ${u.n} berhasil diaktifkan kembali`)
+                        try {
+                          await supabase.from("profiles").update({ aktif: true }).eq("email", u.e)
+                          await logAudit({
+                            user_nama: "Koordinator",
+                            aksi: "Aktifkan",
+                            tabel: "profiles",
+                            objek: `akun · ${u.n} (${u.e})`,
+                            sebelum: { aktif: false },
+                            sesudah: { aktif: true },
+                          })
+                        } catch (err) {
+                          console.warn("Gagal aktifkan akun di Supabase:", err)
+                        }
+                      }
+                    }}
                     className={cx(
                       "text-sm font-semibold hover:underline",
                       u.a ? "text-red-700" : "text-emerald-700",
@@ -135,8 +188,22 @@ export default function ManajemenAkun({ toast }: Props) {
             </Btn>
             <Btn
               disabled={!nu.n || !nu.e}
-              onClick={() => {
+              onClick={async () => {
                 setUsers((p) => [...p, { ...nu, a: true }])
+                const targetRole = nu.p.includes("Koordinator") ? "koordinator" : "sopir"
+                await supabase.auth.signUp({
+                  email: nu.e.trim().toLowerCase(),
+                  password: "damri" + Math.floor(1000 + Math.random() * 9000),
+                  options: { data: { nama: nu.n.trim(), role: targetRole } }
+                }).catch(() => {})
+                await logAudit({
+                  user_nama: "Koordinator",
+                  aksi: "Tambah",
+                  tabel: "profiles",
+                  objek: `akun · ${nu.n} (${nu.e})`,
+                  sebelum: {},
+                  sesudah: { email: nu.e, peran: nu.p, aktif: true }
+                })
                 setNu({ n: "", e: "", p: "Sopir" })
                 setAdd(false)
                 toast("Akun ditambahkan")
@@ -185,9 +252,15 @@ export default function ManajemenAkun({ toast }: Props) {
               Batal
             </Btn>
             <Btn
-              onClick={() => {
+              onClick={async () => {
+                const targetEmail = reset
                 setReset(null)
-                toast("Tautan reset dikirim ke " + reset)
+                toast("Tautan reset dikirim ke " + targetEmail)
+                if (targetEmail) {
+                  try {
+                    await supabase.auth.resetPasswordForEmail(targetEmail).catch(() => {})
+                  } catch {}
+                }
               }}
             >
               Kirim tautan reset
@@ -209,14 +282,28 @@ export default function ManajemenAkun({ toast }: Props) {
             </Btn>
             <Btn
               variant="danger"
-              onClick={() => {
+              onClick={async () => {
                 if (deactivateTarget) {
+                  const target = deactivateTarget
                   setUsers((p) =>
                     p.map((x) =>
-                      x.e === deactivateTarget.e ? { ...x, a: false } : x,
+                      x.e === target.e ? { ...x, a: false } : x,
                     ),
                   )
-                  toast(`Akun ${deactivateTarget.n} dinonaktifkan`)
+                  toast(`Akun ${target.n} dinonaktifkan`)
+                  try {
+                    await supabase.from("profiles").update({ aktif: false }).eq("email", target.e)
+                    await logAudit({
+                      user_nama: "Koordinator",
+                      aksi: "Nonaktifkan",
+                      tabel: "profiles",
+                      objek: `akun · ${target.n} (${target.e})`,
+                      sebelum: { aktif: true },
+                      sesudah: { aktif: false },
+                    })
+                  } catch (err) {
+                    console.warn("Gagal nonaktifkan akun di Supabase:", err)
+                  }
                   setDeactivateTarget(null)
                 }
               }}

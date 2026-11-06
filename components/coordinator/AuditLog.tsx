@@ -1,28 +1,39 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AUDIT } from "@/lib/data"
 import { DateInput, Drawer, Empty, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
+import { getAuditLogs, type AuditItem } from "@/lib/supabaseService"
 
 export default function AuditLog() {
+  const [logs, setLogs] = useState<AuditItem[]>(AUDIT)
   const [u, setU] = useState("")
   const [a, setA] = useState("")
   const [from, setFrom] = useState("")
   const [until, setUntil] = useState("")
-  const [open, setOpen] = useState<typeof AUDIT[number] | null>(null)
-  const iso = (t: string) => "2026-10-" + t.slice(0, 2)
-  const list = AUDIT.filter(
+  const [open, setOpen] = useState<AuditItem | null>(null)
+
+  useEffect(() => {
+    getAuditLogs().then((res) => {
+      if (res && res.length > 0) {
+        setLogs(res)
+      }
+    })
+  }, [])
+
+  const getIsoDate = (x: AuditItem) => (x.rawTime ? x.rawTime.slice(0, 10) : "2026-10-" + x.t.slice(0, 2))
+  const list = logs.filter(
     (x) =>
       (!u || x.u === u) &&
       (!a || x.a === a) &&
-      (!from || iso(x.t) >= from) &&
-      (!until || iso(x.t) <= until),
+      (!from || getIsoDate(x) >= from) &&
+      (!until || getIsoDate(x) <= until),
   )
-  const users = [...new Set(AUDIT.map((x) => x.u))]
-  const acts = [...new Set(AUDIT.map((x) => x.a))]
-  const keys = (o: typeof AUDIT[number]) => [
-    ...new Set([...Object.keys(o.before), ...Object.keys(o.after)]),
+  const users = [...new Set(logs.map((x) => x.u))]
+  const acts = [...new Set(logs.map((x) => x.a))]
+  const keys = (o: AuditItem) => [
+    ...new Set([...Object.keys(o.before || {}), ...Object.keys(o.after || {})]),
   ]
 
   return (
@@ -31,7 +42,7 @@ export default function AuditLog() {
         Audit Log
       </Title>
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <DateInput
+        <DateInput
           aria-label="Dari tanggal"
           placeholder="Dari (dd/mm/yyyy)"
           value={from}
@@ -146,4 +157,3 @@ export default function AuditLog() {
     </>
   )
 }
-

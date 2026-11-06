@@ -5,6 +5,9 @@ import { Lock, Plus } from "lucide-react"
 import { SEGMENTS, JALUR, VEHICLES, TODAY, rupiah, jalur, seg, fmtDate } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
+import { getMasterData, logAudit } from "@/lib/supabaseService"
+import { supabase } from "@/lib/supabase"
+import { useEffect } from "react"
 
 interface Props {
   toast: (t: string) => void
@@ -23,6 +26,23 @@ export default function MasterData({ toast }: Props) {
   const [segs, setSegs] = useState(SEGMENTS)
   const [jals, setJals] = useState(JALUR)
   const [vehs, setVehs] = useState(VEHICLES)
+  useEffect(() => {
+    getMasterData().then((m) => {
+      if (m.segments?.length) setSegs(m.segments)
+      if (m.jalurList?.length) setJals(m.jalurList)
+      if (m.vehicles?.length) setVehs(m.vehicles)
+    })
+    supabase.from("tarif_jalur").select("*").order("berlaku_mulai", { ascending: false }).then(({ data }) => {
+      if (data && data.length > 0) {
+        setTarifs(data.map(t => ({
+          jalurId: t.jalur_id,
+          tarif: Number(t.tarif),
+          mulai: t.berlaku_mulai
+        })))
+      }
+    })
+  }, [])
+
   const [tarifs, setTarifs] = useState<Tarif[]>([
     ...JALUR.filter((j) => j.tarif).map((j) => ({
       jalurId: j.id,
@@ -37,74 +57,155 @@ export default function MasterData({ toast }: Props) {
   const f = (k: string) => form?.[k] ?? ""
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }))
   const has = (s: string) => s.toLowerCase().includes(q.toLowerCase())
-  const toggle = <T extends { aktif: boolean },>(
+  const toggle = async <T extends { aktif: boolean },>(
     arr: T[],
     set_: (a: T[]) => void,
     i: number,
   ) => {
-    set_(arr.map((x, k) => (k === i ? { ...x, aktif: !x.aktif } : x)))
-    toast(arr[i].aktif ? "Dinonaktifkan" : "Diaktifkan kembali")
+    const item = arr[i]
+    const nextAktif = !item.aktif
+    set_(arr.map((x, k) => (k === i ? { ...x, aktif: nextAktif } : x)))
+    toast(item.aktif ? "Dinonaktifkan" : "Diaktifkan kembali")
+
+    try {
+      if (tab === "Segmen") {
+        const segItem = item as unknown as { id: string; nama: string }
+        await supabase.from("segmen").update({ aktif: nextAktif }).or(`kode.eq.${segItem.id},id.eq.${segItem.id}`)
+        await logAudit({
+          user_nama: "Koordinator",
+          aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
+          tabel: "segmen",
+          objek: `segmen · ${segItem.nama}`,
+          sebelum: { aktif: item.aktif },
+          sesudah: { aktif: nextAktif },
+        })
+      } else if (tab === "Jalur") {
+        const jalItem = item as unknown as { id: string; nama: string }
+        await supabase.from("jalur").update({ aktif: nextAktif }).eq("id", jalItem.id)
+        await logAudit({
+          user_nama: "Koordinator",
+          aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
+          tabel: "jalur",
+          objek: `jalur · ${jalItem.nama}`,
+          sebelum: { aktif: item.aktif },
+          sesudah: { aktif: nextAktif },
+        })
+      } else if (tab === "Kendaraan") {
+        const vehItem = item as unknown as { cb: string; plat: string }
+        await supabase.from("kendaraan").update({ aktif: nextAktif }).eq("kode_cb", vehItem.cb)
+        await logAudit({
+          user_nama: "Koordinator",
+          aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
+          tabel: "kendaraan",
+          objek: `kendaraan · ${vehItem.cb}`,
+          sebelum: { aktif: item.aktif },
+          sesudah: { aktif: nextAktif },
+        })
+      }
+    } catch (err) {
+      console.warn("Gagal sinkron toggle master data ke Supabase:", err)
+    }
   }
-  const save = () => {
-    if (tab === "Segmen")
-      setSegs((p) => {
-        const nilai =
-          f("kontrak") === "ya"
-            ? Number(f("nilai").replace(/\D/g, ""))
-            : undefined
-        const item = {
-          id: f("id") || f("nama").toLowerCase(),
-          nama: f("nama"),
-          kontrak: f("kontrak") === "ya",
-          nilaiTetap: nilai,
-          aktif: true,
+  const save = async () => {
+    if (tab === "Segmen") {
+      const nama = f("nama").trim()
+      const kode = f("id") || nama.toLowerCase().replace(/\s+/g, "-")
+      const kontrak = f("kontrak") === "ya"
+      const nilaiTetap = kontrak ? Number(f("nilai").replace(/\D/g, "")) : undefined
+      const item = { id: kode, nama, kontrak, nilaiTetap, aktif: true }
+      setSegs((p) => f("id") ? p.map((x) => x.id === item.id ? { ...x, ...item, aktif: x.aktif } : x) : [...p, item])
+      
+      try {
+        await supabase.from("segmen").upsert({
+          kode,
+          nama,
+          kontrak,
+          nilai_tetap: nilaiTetap || null,
+          aktif: true
+        }, { onConflict: "kode" })
+        await logAudit({
+          user_nama: "Koordinator",
+          aksi: f("id") ? "Ubah" : "Tambah",
+          tabel: "segmen",
+          objek: `segmen · ${nama}`,
+          sebelum: {},
+          sesudah: { nama, kontrak, nilaiTetap }
+        })
+      } catch (err) {
+        console.warn("Gagal simpan segmen ke Supabase:", err)
+      }
+    }
+    if (tab === "Jalur") {
+      const nama = f("nama").trim()
+      const segmentKode = f("segmentId") || "bandara"
+      try {
+        const { data: segRow } = await supabase.from("segmen").select("id").eq("kode", segmentKode).limit(1)
+        const segId = segRow?.[0]?.id
+        if (f("id")) {
+          setJals((p) => p.map((x) => x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x))
+          await supabase.from("jalur").update({ nama, segmen_id: segId }).eq("id", f("id"))
+        } else {
+          const { data: ins } = await supabase.from("jalur").insert({ nama, segmen_id: segId, aktif: true }).select()
+          const newId = ins?.[0]?.id || "j_" + Date.now()
+          setJals((p) => [...p, { id: newId, nama, segmentId: segmentKode, tarif: 0, aktif: true }])
         }
-        return f("id")
-          ? p.map((x) =>
-              x.id === item.id ? { ...x, ...item, aktif: x.aktif } : x,
-            )
-          : [...p, item]
+        await logAudit({
+          user_nama: "Koordinator",
+          aksi: f("id") ? "Ubah" : "Tambah",
+          tabel: "jalur",
+          objek: `jalur · ${nama}`,
+          sebelum: {},
+          sesudah: { nama, segmentKode }
+        })
+      } catch (err) {
+        console.warn("Gagal simpan jalur ke Supabase:", err)
+      }
+    }
+    if (tab === "Kendaraan") {
+      const cb = f("cb").trim()
+      const plat = f("plat").trim()
+      if (f("id")) {
+        setVehs((p) => p.map((x) => x.cb === f("id") ? { ...x, cb, plat } : x))
+        supabase.from("kendaraan").update({ kode_cb: cb, plat }).eq("kode_cb", f("id")).then(() => {})
+      } else {
+        setVehs((p) => [...p, { cb, plat, aktif: true }])
+        supabase.from("kendaraan").insert({ kode_cb: cb, plat, aktif: true }).then(() => {})
+      }
+      logAudit({
+        user_nama: "Koordinator",
+        aksi: f("id") ? "Ubah" : "Tambah",
+        tabel: "kendaraan",
+        objek: `kendaraan · ${cb}`,
+        sebelum: {},
+        sesudah: { cb, plat }
       })
-    if (tab === "Jalur")
-      setJals((p) =>
-        f("id")
-          ? p.map((x) =>
-              x.id === f("id")
-                ? {
-                    ...x,
-                    nama: f("nama"),
-                    segmentId: f("segmentId") || x.segmentId,
-                  }
-                : x,
-            )
-          : [
-              ...p,
-              {
-                id: "jx" + p.length,
-                nama: f("nama"),
-                segmentId: f("segmentId") || "bandara",
-                tarif: 0,
-                aktif: true,
-              },
-            ],
-      )
-    if (tab === "Kendaraan")
-      setVehs((p) =>
-        f("id")
-          ? p.map((x) =>
-              x.cb === f("id") ? { ...x, cb: f("cb"), plat: f("plat") } : x,
-            )
-          : [...p, { cb: f("cb"), plat: f("plat"), aktif: true }],
-      )
-    if (tab === "Tarif")
-      setTarifs((p) => [
-        ...p,
-        {
-          jalurId: f("jalurId") || "j1",
-          tarif: Number(f("tarif").replace(/\D/g, "")),
-          mulai: f("mulai") || TODAY,
-        },
-      ])
+    }
+    if (tab === "Tarif") {
+      const jalurId = f("jalurId") || "j1"
+      const tarif = Number(f("tarif").replace(/\D/g, ""))
+      const mulai = f("mulai") || TODAY
+      setTarifs((p) => [...p, { jalurId, tarif, mulai }])
+      
+      try {
+        const { data: jRow } = await supabase.from("jalur").select("id").or(`id.eq.${jalurId},nama.eq.${jalurId}`).limit(1)
+        const resolvedJalurId = jRow?.[0]?.id || jalurId
+        await supabase.from("tarif_jalur").insert({
+          jalur_id: resolvedJalurId,
+          tarif,
+          berlaku_mulai: mulai
+        })
+        await logAudit({
+          user_nama: "Koordinator",
+          aksi: "Tambah",
+          tabel: "tarif_jalur",
+          objek: `tarif · ${jalurId}`,
+          sebelum: {},
+          sesudah: { tarif, berlaku_mulai: mulai }
+        })
+      } catch (err) {
+        console.warn("Gagal simpan tarif ke Supabase:", err)
+      }
+    }
     setForm(null)
     toast("Tersimpan")
   }

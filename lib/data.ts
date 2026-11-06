@@ -77,8 +77,22 @@ export const rupiah = (n: number | null | undefined) =>
 export const nf = (n: number | null | undefined) => (n == null ? '–' : Math.round(n).toLocaleString('id-ID'))
 export const fmtDate = (iso: string) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-export const seg = (id: string) => SEGMENTS.find((s) => s.id === id)!
-export const jalur = (id: string) => JALUR.find((j) => j.id === id)!
+export const seg = (id: string) =>
+  SEGMENTS.find((s) => s.id === id || (s as any).kode === id) || {
+    id: id || "bandara",
+    nama: id === "bandara" ? "Bandara" : id === "akap" ? "Antar Kota" : id || "Segmen",
+    kontrak: false,
+    aktif: true,
+  }
+
+export const jalur = (id: string) =>
+  JALUR.find((j) => j.id === id || j.nama === id) || {
+    id: id || "j1",
+    nama: id || "Dipatiukur - Soekarno-Hatta",
+    segmentId: "bandara",
+    tarif: 150000,
+    aktif: true,
+  }
 export const plat = (cb: string) => VEHICLES.find((v) => v.cb === cb)?.plat ?? ''
 
 export function calc(d: Pick<Departure, 'segmentId' | 'jalurId' | 'penumpang' | 'pendapatan' | 'subsidi' | 'bagasi' | 'kmTempuh'>) {

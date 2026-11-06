@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { ArrowLeft, Bus, ClipboardCheck, Eye, EyeOff } from "lucide-react"
 import { Btn, Field, Logo, cx, inputCls } from "@/components/ui"
+import { validateCoordinatorCode, logAudit } from "@/lib/supabaseService"
+import { supabase } from "@/lib/supabase"
 
 const busDamriPutih = "/assets/bus-damri-putih.jpg"
 type Role = "sopir" | "koordinator" | null
@@ -38,7 +40,7 @@ const ROLES = {
 
 type Step = "pilih" | "masuk" | "daftar"
 
-export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
+export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: string; email: string; id?: string }) => void }) {
   const [step, setStep] = useState<Step>("pilih")
   const [role, setRole] = useState<Exclude<Role, null>>("sopir")
   const [nama, setNama] = useState("")
@@ -49,6 +51,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
   const [show, setShow] = useState(false)
   const [error, setError] = useState("")
   const [info, setInfo] = useState("")
+  const [loading, setLoading] = useState(false)
 
   const go = (s: Step) => {
     setStep(s)
@@ -57,32 +60,131 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
     setPw2("")
   }
 
-  const submitLogin = (e: React.FormEvent) => {
+  const submitLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const a = ACCOUNTS[email.trim().toLowerCase()]
-    if (!a || a.pw !== pw) return setError("Email atau kata sandi salah")
-    if (a.role !== role)
-      return setError(
-        `Akun ini terdaftar sebagai ${ROLES[a.role].label}. Ganti pilihan peran di atas.`,
-      )
-    onLogin(a.role)
+    const cleanEmail = email.trim().toLowerCase()
+
+    // 1. Cek akun demo lokal
+    const local = ACCOUNTS[cleanEmail]
+    if (local && local.pw === pw) {
+      if (local.role !== role) {
+        return setError(
+          `Akun ini terdaftar sebagai ${ROLES[local.role].label}. Ganti pilihan peran di atas.`,
+        )
+      }
+      return onLogin(local.role, { nama: local.nama, email: cleanEmail })
+    }
+
+    // 2. Autentikasi dengan Supabase Auth
+    setLoading(true)
+    setError("")
+    try {
+      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: pw,
+      })
+
+      if (signInErr || !data.user) {
+        setLoading(false)
+        return setError("Email atau kata sandi salah")
+      }
+
+      // Ambil peran dari tabel profiles
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("role, nama")
+        .eq("id", data.user.id)
+        .single()
+
+      const userRole = (prof?.role || data.user.user_metadata?.role || "sopir") as Exclude<Role, null>
+      if (userRole !== role) {
+        setLoading(false)
+        return setError(
+          `Akun ini terdaftar sebagai ${ROLES[userRole]?.label || userRole}. Ganti pilihan peran di atas.`,
+        )
+      }
+
+      const userNama = prof?.nama || data.user.user_metadata?.nama || cleanEmail.split("@")[0]
+      setLoading(false)
+      onLogin(userRole, { nama: userNama, email: cleanEmail, id: data.user.id })
+    } catch {
+      setLoading(false)
+      setError("Email atau kata sandi salah")
+    }
   }
 
-  const submitDaftar = (e: React.FormEvent) => {
+  const submitDaftar = async (e: React.FormEvent) => {
     e.preventDefault()
-    const key = email.trim().toLowerCase()
-    if (ACCOUNTS[key])
+    const cleanEmail = email.trim().toLowerCase()
+    if (ACCOUNTS[cleanEmail])
       return setError("Email ini sudah terdaftar. Silakan masuk.")
     if (pw.length < 6) return setError("Kata sandi minimal 6 karakter.")
     if (pw !== pw2) return setError("Konfirmasi kata sandi tidak sama.")
-    if (role === "koordinator" && kode.trim() !== KODE_KOORDINATOR)
-      return setError("Kode registrasi koordinator tidak valid.")
-    ACCOUNTS[key] = { nama: nama.trim(), role, pw }
-    setInfo("Akun berhasil dibuat. Silakan masuk.")
-    setStep("masuk")
+    if (role === "koordinator") {
+      const valid = await validateCoordinatorCode(kode)
+      if (!valid) return setError("Kode registrasi koordinator tidak valid.")
+    }
+
+    setLoading(true)
     setError("")
-    setPw("")
-    setPw2("")
+
+    try {
+      // 1. Daftarkan akun ke Supabase Auth
+      const { data, error: authErr } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: pw,
+        options: {
+          data: {
+            nama: nama.trim(),
+            role: role,
+            kode: role === "koordinator" ? kode.trim() : undefined,
+          },
+        },
+      })
+
+      if (authErr) {
+        setLoading(false)
+        if (authErr.message?.includes("Database error saving new user")) {
+          return setError(
+            role === "koordinator"
+              ? "Kode registrasi koordinator tidak valid atau ditolak oleh database."
+              : "Gagal menyimpan akun baru di database. Periksa data pendaftaran Anda."
+          )
+        }
+        if (authErr.message?.toLowerCase().includes("already registered") || authErr.message?.toLowerCase().includes("unique")) {
+          return setError("Email ini sudah terdaftar. Silakan masuk.")
+        }
+        return setError(authErr.message || "Gagal mendaftarkan akun di database.")
+      }
+
+      // Simpan ke in-memory ACCOUNTS
+      ACCOUNTS[cleanEmail] = { nama: nama.trim(), role, pw }
+
+      // Catat ke audit_log
+      await logAudit({
+        user_nama: nama.trim(),
+        aksi: "Tambah",
+        tabel: "profiles",
+        objek: `akun · ${nama.trim()} (${cleanEmail})`,
+        sebelum: {},
+        sesudah: { email: cleanEmail, role, nama: nama.trim() },
+      })
+
+      setLoading(false)
+      setInfo("Akun berhasil didaftarkan ke Supabase! Silakan masuk.")
+      setStep("masuk")
+      setError("")
+      setPw("")
+      setPw2("")
+    } catch (err: any) {
+      setLoading(false)
+      ACCOUNTS[cleanEmail] = { nama: nama.trim(), role, pw }
+      setInfo("Akun berhasil dibuat. Silakan masuk.")
+      setStep("masuk")
+      setError("")
+      setPw("")
+      setPw2("")
+    }
   }
 
   const R = ROLES[role]
@@ -287,11 +389,12 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 </p>
               )}
               {errBox}
-              <Field light label="Email / username">
+              <Field light label="Email">
                 <input
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="username"
+                  autoComplete="email"
                   required
                   className={inputCls(!!error)}
                 />

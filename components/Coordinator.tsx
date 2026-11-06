@@ -25,6 +25,7 @@ import ManajemenAkun from "./coordinator/ManajemenAkun"
 import ArsipBackup from "./coordinator/ArsipBackup"
 import AuditLog from "./coordinator/AuditLog"
 import ProfilKoordinator from "./coordinator/ProfilKoordinator"
+import { supabase } from "@/lib/supabase"
 
 interface Props {
   deps: Departure[]
@@ -33,6 +34,7 @@ interface Props {
   toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   clearNew: () => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 
 export default function Coordinator({
@@ -42,6 +44,7 @@ export default function Coordinator({
   toast,
   onLogout,
   clearNew,
+  currentUser,
 }: Props) {
   const [page, setPage] = useState<Page>("verifikasi")
   const [menu, setMenu] = useState(false)
@@ -52,9 +55,24 @@ export default function Coordinator({
   const [profile, setProfile] = useState<CoordinatorProfile>(() => {
     if (typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem("damri_coord_profile")
-        if (saved) return JSON.parse(saved)
+        const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"
+        const saved = localStorage.getItem(key)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (parsed.foto && parsed.foto.includes("images.unsplash.com")) {
+            parsed.foto = PROFILE_PHOTO
+          }
+          return parsed
+        }
       } catch {}
+    }
+    if (currentUser) {
+      return {
+        nama: currentUser.nama || "Koordinator",
+        email: currentUser.email || "koordinator@damri.co.id",
+        telepon: "0812 3456 7890",
+        foto: PROFILE_PHOTO,
+      }
     }
     return {
       nama: "Rina Marlina",
@@ -63,6 +81,21 @@ export default function Coordinator({
       foto: PROFILE_PHOTO,
     }
   })
+
+  useEffect(() => {
+    if (currentUser) {
+      setProfile((prev) => ({
+        ...prev,
+        nama: currentUser.nama || prev.nama,
+        email: currentUser.email || prev.email,
+      }))
+      setProfileDraft((prev) => ({
+        ...prev,
+        nama: currentUser.nama || prev.nama,
+        email: currentUser.email || prev.email,
+      }))
+    }
+  }, [currentUser])
   const [profileDraft, setProfileDraft] = useState<CoordinatorProfile>(profile)
   const [password, setPassword] = useState("damri123")
   const [passwordForm, setPasswordForm] = useState({
@@ -305,7 +338,7 @@ export default function Coordinator({
                 setProfile(updated)
                 if (typeof window !== "undefined") {
                   try {
-                    localStorage.setItem("damri_coord_profile", JSON.stringify(updated))
+                    const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"; localStorage.setItem(key, JSON.stringify(updated)); if (currentUser?.id) { supabase.from("profiles").update({ nama: updated.nama, telepon: updated.telepon }).eq("id", currentUser.id).then(() => {}); }
                   } catch {}
                 }
                 setProfileDialog(false)
