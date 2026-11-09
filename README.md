@@ -22,7 +22,7 @@ This project uses Next.js App Router with modular feature components:
 - `components/auth/`
   - `FormLogin.tsx` - Form login, pemilihan peran, dan pendaftaran koordinator
 - `components/coordinator/`
-  - `ArsipBackup.tsx` - Fitur arsip bulanan & riwayat backup
+  - `ArsipBackup.tsx` - Arsip dari periode Dashboard, unduhan CSV, dan riwayat unduhan
   - `VerifikasiKeberangkatan.tsx` - Fitur verifikasi & persetujuan perjalanan bus
   - `DashboardAnalitik.tsx` - Fitur visualisasi analitik & grafik produksi bus
   - `LaporanOperasional.tsx` - Fitur rekapitulasi laporan & ekspor Excel / AK 15
@@ -41,7 +41,9 @@ This project uses Next.js App Router with modular feature components:
 - `components/Driver.tsx` - Shell navigasi sopir bus
 - `components/ui.tsx` - Shared UI primitives (Btn, Dialog, Drawer, Field, NumInput, StatusBadge, etc.)
 - `lib/data.ts` - Master dataset, calculations, mock seeds, and helper utilities
+- `lib/archiveService.ts` - Membaca dan menyimpan arsip/riwayat unduhan koordinator di Supabase
 - `lib/supabase.ts` - Supabase client configuration
+- `supabase/migrations/` - Skema dan kebijakan akses arsip koordinator
 - `types/index.ts` - Shared TypeScript interfaces and types
 - `public/assets/` - Static assets (`bus-damri-putih.jpg`, `logo-damri-full.png`, `logo-damri.png`)
 - `package.json` - Project dependencies and Next.js scripts
@@ -54,3 +56,17 @@ This project uses Next.js App Router with modular feature components:
 - Styling: Tailwind CSS v4 with `@tailwindcss/postcss`
 - Build tooling: Next.js Turbopack, TypeScript 5.7
 - Formatting: oxfmt
+
+## Arsip koordinator di Supabase
+
+Arsip Dashboard dan riwayat unduhan disimpan di Supabase dan dikaitkan dengan
+ID akun koordinator yang sedang masuk. Jalankan file
+`supabase/migrations/20261108160000_coordinator_archives.sql` melalui
+Supabase Dashboard → SQL Editor sebelum memakai fitur ini. Migrasi membuat
+tabel arsip dan riwayat unduhan serta mengaktifkan
+Row Level Security agar akun yang masuk hanya dapat membaca dan menulis
+arsip miliknya sendiri. Antarmuka fitur arsip tersedia untuk koordinator.
+
+Arsip/riwayat yang dibuat sebelum migrasi hanya ada di penyimpanan browser dan
+tidak otomatis dipindahkan ke Supabase. Akun demo lokal tidak mempunyai sesi
+Supabase, sehingga tidak dapat menyimpan arsip lintas perangkat.

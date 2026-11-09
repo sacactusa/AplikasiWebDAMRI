@@ -26,6 +26,11 @@ import ArsipBackup from "./coordinator/ArsipBackup"
 import AuditLog from "./coordinator/AuditLog"
 import ProfilKoordinator from "./coordinator/ProfilKoordinator"
 import { supabase } from "@/lib/supabase"
+import {
+  archiveRequestErrorMessage,
+  createCoordinatorArchive,
+} from "@/lib/archiveService"
+import type { SavedArchive } from "./coordinator/shared"
 
 interface Props {
   deps: Departure[]
@@ -106,6 +111,30 @@ export default function Coordinator({
   const [passwordError, setPasswordError] = useState("")
   const waiting = deps.filter((d) => d.status === "dikirim").length
   const online = !offline
+
+  const saveDashboardArchive = async (
+    archive: Omit<SavedArchive, "id" | "createdAt">,
+  ) => {
+    if (!currentUser?.id) {
+      toast(
+        "Penyimpanan arsip memerlukan akun koordinator asli",
+        "error",
+      )
+      return
+    }
+
+    try {
+      await createCoordinatorArchive(currentUser.id, archive)
+      toast(
+        `Arsip ${archive.label} tersimpan di akun Anda. Silakan unduh di Arsip & Backup.`,
+        "success",
+      )
+      setPage("arsip"      )
+    } catch (error) {
+      console.error("Gagal menyimpan arsip dashboard:", error)
+      toast(`Arsip gagal disimpan: ${archiveRequestErrorMessage(error)}`, "error")
+    }
+  }
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" })
@@ -285,14 +314,16 @@ export default function Coordinator({
             />
           )}
           {page === "dashboard" && (
-            <DashboardAnalitik deps={deps} go={setPage} />
+            <DashboardAnalitik deps={deps} onExport={saveDashboardArchive} />
           )}
           {page === "laporan" && (
             <LaporanOperasional deps={deps} toast={toast} />
           )}
           {page === "master" && <MasterData toast={toast} />}
           {page === "akun" && <ManajemenAkun toast={toast} />}
-          {page === "arsip" && <ArsipBackup toast={toast} />}
+          {page === "arsip" && (
+            <ArsipBackup coordinatorId={currentUser?.id} toast={toast} />
+          )}
           {page === "audit" && <AuditLog />}
           {page === "profil" && (
             <ProfilKoordinator

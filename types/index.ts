@@ -42,6 +42,25 @@ export interface Departure {
   isNew?: boolean
 }
 
+export interface SavedArchive {
+  id: string
+  label: string
+  startDate: string
+  endDate: string
+  segment: string
+  createdAt: string
+  departures: Departure[]
+}
+
+export interface DownloadHistoryItem {
+  id: string
+  archiveId: string
+  archiveLabel: string
+  downloadedAt: string
+  size: number
+  successful: boolean
+}
+
 export type Role = 'sopir' | 'koordinator' | null
 
 export interface Account {
@@ -49,4 +68,3 @@ export interface Account {
   role: Exclude<Role, null>
   pw: string
 }
-

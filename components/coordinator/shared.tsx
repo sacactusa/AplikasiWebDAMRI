@@ -3,6 +3,8 @@ import type { Departure } from "@/lib/data"
 import { calc, TODAY } from "@/lib/data"
 import { DateInput, cx, inputCls } from "@/components/ui"
 
+export type { DownloadHistoryItem, SavedArchive } from "@/types"
+
 export type Page =
   | "verifikasi"
   | "dashboard"
@@ -63,8 +65,14 @@ export function useRange() {
   const range = useMemo<[string, string]>(() => {
     if (mode === "harian") return [anchor, anchor]
     if (mode === "mingguan") return [addDays(anchor, -6), anchor]
-    if (mode === "bulanan")
-      return [anchor.slice(0, 8) + "01", anchor.slice(0, 8) + "31"]
+    if (mode === "bulanan") {
+      const year = Number(anchor.slice(0, 4))
+      const month = Number(anchor.slice(5, 7))
+      const lastDay = new Date(Date.UTC(year, month, 0))
+        .toISOString()
+        .slice(0, 10)
+      return [anchor.slice(0, 8) + "01", lastDay]
+    }
     return [anchor, to]
   }, [mode, anchor, to])
   return { mode, setMode, anchor, setAnchor, to, setTo, range }

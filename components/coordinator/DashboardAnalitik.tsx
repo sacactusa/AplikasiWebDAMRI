@@ -22,17 +22,18 @@ import {
   useRange,
   RangePicker,
   agg,
-  type Page,
+  type SavedArchive,
 } from "./shared"
 
 interface Props {
   deps: Departure[]
-  go: (p: Page) => void
+  onExport: (archive: Omit<SavedArchive, "id" | "createdAt">) => Promise<void>
 }
 
-export default function DashboardAnalitik({ deps, go }: Props) {
+export default function DashboardAnalitik({ deps, onExport }: Props) {
   const r = useRange()
   const [sg, setSg] = useState("all")
+  const [savingArchive, setSavingArchive] = useState(false)
   const approved = deps.filter(
     (d) =>
       d.status === "disetujui" && d.date >= r.range[0] && d.date <= r.range[1],
@@ -55,6 +56,24 @@ export default function DashboardAnalitik({ deps, go }: Props) {
     ...agg(scoped.filter((d) => d.jalurId === j.id)),
   })).filter((x) => x.rit > 0)
 
+  const formatPeriodDate = (date: string) =>
+    new Date(date + "T00:00:00").toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
+  const periodLabel =
+    r.mode === "bulanan"
+      ? `Bulanan · ${new Date(r.anchor + "T00:00:00").toLocaleDateString("id-ID", {
+          month: "long",
+          year: "numeric",
+        })}`
+      : `${r.mode === "harian" ? "Harian" : r.mode === "mingguan" ? "Mingguan" : "Rentang"} · ${
+          r.range[0] === r.range[1]
+            ? formatPeriodDate(r.range[0])
+            : `${formatPeriodDate(r.range[0])} – ${formatPeriodDate(r.range[1])}`
+        }`
+
   const kpi: [string, string][] = [
     ["KM tempuh", nf(t.km)],
     ["Penumpang", nf(t.pnp)],
@@ -68,7 +87,7 @@ export default function DashboardAnalitik({ deps, go }: Props) {
     <>
       <Title
         sub="Hanya keberangkatan berstatus Disetujui yang dihitung."
-                right={
+        right={
           <div className="flex w-full items-center gap-2.5 sm:w-auto">
             <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-white px-3 shadow-2xs sm:w-auto sm:flex-initial sm:px-3.5">
               <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy">
@@ -76,8 +95,25 @@ export default function DashboardAnalitik({ deps, go }: Props) {
               </span>
               <LiveDateTime compact />
             </div>
-            <Btn onClick={() => go("laporan")} className="h-11 shrink-0 px-4">
-              <Download size={16} /> Ekspor
+            <Btn
+              disabled={savingArchive || scoped.length === 0}
+              onClick={async () => {
+                setSavingArchive(true)
+                try {
+                  await onExport({
+                    label: periodLabel,
+                    startDate: r.range[0],
+                    endDate: r.range[1],
+                    segment: sg === "all" ? "Semua segmen" : seg(sg).nama,
+                    departures: scoped,
+                  })
+                } finally {
+                  setSavingArchive(false)
+                }
+              }}
+              className="h-11 shrink-0 px-4"
+            >
+              <Download size={16} /> {savingArchive ? "Menyimpan…" : "Ekspor"}
             </Btn>
           </div>
         }
@@ -243,4 +279,3 @@ export default function DashboardAnalitik({ deps, go }: Props) {
     </>
   )
 }
-
