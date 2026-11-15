@@ -35,3 +35,6 @@ Thumbs.db
 .antigravity/
 supabase.tar.gz
 *.tar.gz
+
+#file
+template laporan excel.xlsx

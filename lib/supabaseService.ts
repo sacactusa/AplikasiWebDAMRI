@@ -152,6 +152,7 @@ export async function getDepartures(isDemo = false): Promise<Departure[]> {
       time: typeof r.jam === "string" ? r.jam.slice(0, 5) : r.jam,
       segmentId: r.segmen_kode || r.segmen_id,
       jalurId: r.jalur_id,
+      jalurNama: r.jalur_nama || undefined,
       cb: r.cb,
       driver: r.sopir_nama || "Sopir",
       kmTempuh: r.km_tempuh != null ? Number(r.km_tempuh) : null,

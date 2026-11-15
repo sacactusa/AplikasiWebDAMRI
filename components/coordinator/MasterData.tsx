@@ -389,10 +389,10 @@ export default function MasterData({ toast }: Props) {
                     a.jalurId.localeCompare(b.jalurId) ||
                     b.mulai.localeCompare(a.mulai),
                 )
-                .filter((x) => has(jalur(x.jalurId).nama))
+                .filter((x) => has(jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama))
                 .map((x, i, arr) => (
                   <tr key={i} className="border-b border-line last:border-0">
-                    <td className={td}>{jalur(x.jalurId).nama}</td>
+                    <td className={td}>{jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama}</td>
                     <td className={cx(td, "num")}>{rupiah(x.tarif)}</td>
                     <td className={cx(td, "num")}>{fmtDate(x.mulai)}</td>
                     <td className={td}>

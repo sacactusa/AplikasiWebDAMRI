@@ -25,6 +25,7 @@ export interface Departure {
   time: string
   segmentId: string
   jalurId: string
+  jalurNama?: string
   cb: string
   driver: string
   kmTempuh: number | null

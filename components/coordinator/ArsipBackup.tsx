@@ -6,12 +6,15 @@ import { supabase } from "@/lib/supabase"
 import { formatAuditTime } from "@/lib/supabaseService"
 import { Btn, cx } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
+import type { Departure } from "@/lib/data"
+import { exportArsipBulanan } from "@/lib/excelExport"
 
 interface Props {
   toast: (t: string) => void
+  deps?: Departure[]
 }
 
-export default function ArsipBackup({ toast }: Props) {
+export default function ArsipBackup({ toast, deps = [] }: Props) {
   const [months, setMonths] = useState([
     "Oktober 2026 (berjalan)",
     "September 2026",
@@ -61,9 +64,15 @@ export default function ArsipBackup({ toast }: Props) {
             <span className="text-sm font-medium">{m}</span>
             <Btn
               variant="ghost"
-              onClick={() =>
-                toast(`Arsip ${m.split(" (")[0]} (.xlsx) siap diunduh`)
-              }
+              onClick={async () => {
+                const label = m.split(" (")[0]
+                try {
+                  await exportArsipBulanan(label, deps)
+                  toast(`Arsip ${label} (.xlsx) berhasil diunduh`)
+                } catch (e) {
+                  toast(`Gagal mengunduh arsip ${label}`)
+                }
+              }}
             >
               <Download size={16} /> .xlsx
             </Btn>

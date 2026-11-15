@@ -292,7 +292,7 @@ export default function Coordinator({
           )}
           {page === "master" && <MasterData toast={toast} />}
           {page === "akun" && <ManajemenAkun toast={toast} />}
-          {page === "arsip" && <ArsipBackup toast={toast} />}
+          {page === "arsip" && <ArsipBackup toast={toast} deps={deps} />}
           {page === "audit" && <AuditLog />}
           {page === "profil" && (
             <ProfilKoordinator

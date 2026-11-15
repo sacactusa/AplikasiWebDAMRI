@@ -48,6 +48,11 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
   const [rej, setRej] = useState<string | null>(null)
   const [note, setNote] = useState("")
 
+  const driverOptions = useMemo(
+    () => Array.from(new Set([...DRIVERS, ...deps.map((d) => d.driver).filter(Boolean)])),
+    [deps],
+  )
+
   const rows = useMemo(
     () =>
       deps
@@ -186,7 +191,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           className={cx(inputCls(), "h-11")}
         >
           <option value="">Semua sopir</option>
-          {DRIVERS.map((s) => (
+          {driverOptions.map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>

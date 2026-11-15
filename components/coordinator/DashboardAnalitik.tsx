@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getMasterData } from "@/lib/supabaseService"
+import type { Segment, Jalur } from "@/lib/data"
 import { Clock3, Download } from "lucide-react"
 import {
   Bar,
@@ -33,6 +35,15 @@ interface Props {
 export default function DashboardAnalitik({ deps, go }: Props) {
   const r = useRange()
   const [sg, setSg] = useState("all")
+  const [segments, setSegments] = useState<Segment[]>(SEGMENTS)
+  const [jalurList, setJalurList] = useState<Jalur[]>(JALUR)
+
+  useEffect(() => {
+    getMasterData().then((m) => {
+      if (m.segments?.length) setSegments(m.segments)
+      if (m.jalurList?.length) setJalurList(m.jalurList)
+    })
+  }, [])
   const approved = deps.filter(
     (d) =>
       d.status === "disetujui" && d.date >= r.range[0] && d.date <= r.range[1],
@@ -40,7 +51,7 @@ export default function DashboardAnalitik({ deps, go }: Props) {
   const scoped =
     sg === "all" ? approved : approved.filter((d) => d.segmentId === sg)
   const t = agg(approved)
-  const bySeg = SEGMENTS.map((s) => ({
+  const bySeg = segments.map((s) => ({
     id: s.id,
     nama: s.nama,
     ...agg(approved.filter((d) => d.segmentId === s.id)),
@@ -50,7 +61,7 @@ export default function DashboardAnalitik({ deps, go }: Props) {
     tgl: fmtDate(day).slice(0, 6),
     pendapatan: agg(scoped.filter((d) => d.date === day)).total,
   }))
-  const perJalur = JALUR.map((j) => ({
+  const perJalur = jalurList.map((j) => ({
     j,
     ...agg(scoped.filter((d) => d.jalurId === j.id)),
   })).filter((x) => x.rit > 0)

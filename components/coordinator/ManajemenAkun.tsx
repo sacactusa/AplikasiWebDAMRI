@@ -194,7 +194,13 @@ export default function ManajemenAkun({ toast }: Props) {
                 await supabase.auth.signUp({
                   email: nu.e.trim().toLowerCase(),
                   password: "damri" + Math.floor(1000 + Math.random() * 9000),
-                  options: { data: { nama: nu.n.trim(), role: targetRole } }
+                  options: {
+                    data: {
+                      nama: nu.n.trim(),
+                      role: targetRole,
+                      kode: targetRole === "koordinator" ? "DAMRI-KOORD" : undefined,
+                    },
+                  },
                 }).catch(() => {})
                 await logAudit({
                   user_nama: "Koordinator",
