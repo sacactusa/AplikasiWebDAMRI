@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { logAudit } from "@/lib/supabaseService"
-import { Plus, ChevronDown, KeyRound, UserX, UserCheck, Trash2 } from "lucide-react"
+import { Plus, ChevronDown, KeyRound, UserX, UserCheck, Trash2, ShieldCheck, User, UserCog } from "lucide-react"
 import { DRIVERS } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
@@ -66,6 +66,12 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
     n: string
     e: string
   } | null>(null)
+  const [roleTarget, setRoleTarget] = useState<{
+    n: string
+    e: string
+    currentRole: string
+    selectedRole: string
+  } | null>(null)
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
 
   return (
@@ -96,38 +102,22 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
               <tr key={u.e} className="border-b border-line last:border-0">
                 <td className={cx(td, "font-medium")}>{u.n}</td>
                 <td className={cx(td, "text-mute")}>{u.e}</td>
-                <td className={td}>
-                  <select
-                    aria-label="Peran"
-                    value={u.p}
-                    onChange={async (e) => {
-                      const newRoleText = e.target.value
-                      const prevRole = u.p
-                      const targetRole = newRoleText.includes("Koordinator") ? "koordinator" : "sopir"
-                      setUsers((p) =>
-                        p.map((x, k) =>
-                          k === i ? { ...x, p: newRoleText } : x,
-                        ),
-                      )
-                      try {
-                        await supabase.from("profiles").update({ role: targetRole }).eq("email", u.e)
-                        await logAudit({
-                          user_nama: currentUser?.nama || "Koordinator",
-                          aksi: "Ubah",
-                          tabel: "profiles",
-                          objek: `peran · ${u.n} (${u.e})`,
-                          sebelum: { peran: prevRole },
-                          sesudah: { peran: newRoleText },
-                        })
-                      } catch (err) {
-                        console.warn("Gagal sinkron peran akun ke Supabase:", err)
-                      }
-                    }}
-                    className="h-9 rounded-md border border-line bg-white px-2 text-sm"
+                <td className={cx(td, "w-48")}>
+                  <span
+                    className={cx(
+                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-2xs",
+                      u.p.includes("Koordinator")
+                        ? "border-navy-200 bg-navy-50 text-navy"
+                        : "border-slate-200 bg-slate-100 text-slate-700",
+                    )}
                   >
-                    <option>Sopir</option>
-                    <option>Koordinator/Admin</option>
-                  </select>
+                    {u.p.includes("Koordinator") ? (
+                      <ShieldCheck size={13} className="shrink-0 text-navy" />
+                    ) : (
+                      <User size={13} className="shrink-0 text-slate-500" />
+                    )}
+                    <span>{u.p}</span>
+                  </span>
                 </td>
                 <td className={cx(td, "w-28")}>
                   <span
@@ -172,6 +162,37 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                             i >= users.length - 2 ? "bottom-full mb-1" : "top-full mt-1",
                           )}
                         >
+                          <button
+                            type="button"
+                            disabled={Boolean(currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase())}
+                            onClick={() => {
+                              setActiveMenu(null)
+                              if (currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase()) {
+                                toast("Anda tidak dapat mengubah peran akun Anda sendiri yang sedang aktif.")
+                                return
+                              }
+                              setRoleTarget({
+                                n: u.n,
+                                e: u.e,
+                                currentRole: u.p,
+                                selectedRole: u.p.includes("Koordinator") ? "Sopir" : "Koordinator/Admin",
+                              })
+                            }}
+                            className={cx(
+                              "flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-slate-50",
+                              currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase()
+                                ? "cursor-not-allowed text-slate-300 opacity-50"
+                                : "text-ink",
+                            )}
+                            title={
+                              currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase()
+                                ? "Tidak dapat mengubah peran akun sendiri"
+                                : "Ubah peran akun"
+                            }
+                          >
+                            <UserCog size={14} className="shrink-0 text-navy" />
+                            <span>Ubah Peran</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -328,6 +349,101 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
             </select>
           </Field>
         </div>
+      </Dialog>
+      <Dialog
+        open={!!roleTarget}
+        title="Ubah Peran Pengguna"
+        onClose={() => setRoleTarget(null)}
+        actions={
+          <>
+            <Btn variant="outline" onClick={() => setRoleTarget(null)}>
+              Batal
+            </Btn>
+            <Btn
+              disabled={!roleTarget || roleTarget.selectedRole === roleTarget.currentRole}
+              onClick={async () => {
+                if (!roleTarget) return
+                const target = roleTarget
+                const newRoleText = target.selectedRole
+                const prevRole = target.currentRole
+                const targetRole = newRoleText.includes("Koordinator") ? "koordinator" : "sopir"
+
+                setUsers((p) =>
+                  p.map((x) =>
+                    x.e === target.e ? { ...x, p: newRoleText } : x,
+                  ),
+                )
+
+                try {
+                  await supabase
+                    .from("profiles")
+                    .update({ role: targetRole })
+                    .eq("email", target.e)
+
+                  await logAudit({
+                    user_nama: currentUser?.nama || "Koordinator",
+                    aksi: "Ubah",
+                    tabel: "profiles",
+                    objek: `peran · ${target.n} (${target.e})`,
+                    sebelum: { peran: prevRole },
+                    sesudah: { peran: newRoleText },
+                  })
+                  toast(`Peran ${target.n} berhasil diubah menjadi ${newRoleText}`)
+                } catch (err) {
+                  console.warn("Gagal sinkron peran akun ke Supabase:", err)
+                  toast("Gagal memperbarui peran akun di server")
+                }
+
+                setRoleTarget(null)
+              }}
+            >
+              Simpan Perubahan
+            </Btn>
+          </>
+        }
+      >
+        {roleTarget && (
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-ink">
+              Pilih peran baru untuk pengguna{" "}
+              <b className="font-semibold text-ink">{roleTarget.n}</b> (
+              <span className="font-mono text-xs text-mute">{roleTarget.e}</span>):
+            </p>
+
+            <Field label="Peran Baru">
+              <select
+                value={roleTarget.selectedRole}
+                onChange={(e) =>
+                  setRoleTarget({ ...roleTarget, selectedRole: e.target.value })
+                }
+                className={inputCls()}
+              >
+                <option value="Sopir">Sopir</option>
+                <option value="Koordinator/Admin">Koordinator/Admin</option>
+              </select>
+            </Field>
+
+            {roleTarget.selectedRole.includes("Koordinator") &&
+              !roleTarget.currentRole.includes("Koordinator") && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                  <strong>Pemberitahuan Hak Akses:</strong> Akun ini akan
+                  diberikan hak akses administratif penuh sebagai{" "}
+                  <strong>Koordinator/Admin</strong>, termasuk verifikasi
+                  keberangkatan, rekap keuangan, pengelolaan data master, dan
+                  manajemen akun.
+                </div>
+              )}
+
+            {!roleTarget.selectedRole.includes("Koordinator") &&
+              roleTarget.currentRole.includes("Koordinator") && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-800">
+                  <strong>Peringatan Pencabutan Akses:</strong> Mengubah peran
+                  menjadi <strong>Sopir</strong> akan mencabut seluruh hak
+                  akses administratif koordinator dari akun ini.
+                </div>
+              )}
+          </div>
+        )}
       </Dialog>
       <Dialog
         open={!!reset}
