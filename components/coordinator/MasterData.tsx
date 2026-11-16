@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Lock, Plus } from "lucide-react"
+import { Lock, Plus, ChevronDown, Pencil, Eye, EyeOff, Trash2 } from "lucide-react"
 import { SEGMENTS, JALUR, VEHICLES, TODAY, rupiah, jalur, seg, fmtDate } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
@@ -11,6 +11,7 @@ import { useEffect } from "react"
 
 interface Props {
   toast: (t: string) => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 interface Tarif {
   jalurId: string
@@ -18,7 +19,7 @@ interface Tarif {
   mulai: string
 }
 
-export default function MasterData({ toast }: Props) {
+export default function MasterData({ toast, currentUser }: Props) {
   const [tab, setTab] = useState<"Segmen" | "Jalur" | "Tarif" | "Kendaraan">(
     "Segmen",
   )
@@ -54,9 +55,18 @@ export default function MasterData({ toast }: Props) {
     { jalurId: "j5", tarif: 80000, mulai: "2025-07-01" },
   ])
   const [form, setForm] = useState<null | Record<string, string>>(null)
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "Segmen" | "Jalur" | "Tarif" | "Kendaraan"
+    id: string
+    name: string
+    extra?: any
+  } | null>(null)
   const f = (k: string) => form?.[k] ?? ""
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }))
   const has = (s: string) => s.toLowerCase().includes(q.toLowerCase())
+  const userNama = currentUser?.nama || "Koordinator"
+
   const toggle = async <T extends { aktif: boolean },>(
     arr: T[],
     set_: (a: T[]) => void,
@@ -72,7 +82,7 @@ export default function MasterData({ toast }: Props) {
         const segItem = item as unknown as { id: string; nama: string }
         await supabase.from("segmen").update({ aktif: nextAktif }).or(`kode.eq.${segItem.id},id.eq.${segItem.id}`)
         await logAudit({
-          user_nama: "Koordinator",
+          user_nama: userNama,
           aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
           tabel: "segmen",
           objek: `segmen · ${segItem.nama}`,
@@ -83,7 +93,7 @@ export default function MasterData({ toast }: Props) {
         const jalItem = item as unknown as { id: string; nama: string }
         await supabase.from("jalur").update({ aktif: nextAktif }).eq("id", jalItem.id)
         await logAudit({
-          user_nama: "Koordinator",
+          user_nama: userNama,
           aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
           tabel: "jalur",
           objek: `jalur · ${jalItem.nama}`,
@@ -94,7 +104,7 @@ export default function MasterData({ toast }: Props) {
         const vehItem = item as unknown as { cb: string; plat: string }
         await supabase.from("kendaraan").update({ aktif: nextAktif }).eq("kode_cb", vehItem.cb)
         await logAudit({
-          user_nama: "Koordinator",
+          user_nama: userNama,
           aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
           tabel: "kendaraan",
           objek: `kendaraan · ${vehItem.cb}`,
@@ -106,6 +116,130 @@ export default function MasterData({ toast }: Props) {
       console.warn("Gagal sinkron toggle master data ke Supabase:", err)
     }
   }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    const target = deleteTarget
+
+    try {
+      if (target.type === "Segmen") {
+        const { error } = await supabase
+          .from("segmen")
+          .delete()
+          .or(`kode.eq.${target.id},id.eq.${target.id}`)
+
+        if (error) {
+          if (error.code === "23503") {
+            toast(
+              `Gagal menghapus: Segmen '${target.name}' masih terhubung dengan data jalur operasional. Silakan nonaktifkan saja.`,
+            )
+          } else {
+            toast(`Gagal menghapus segmen: ${error.message}`)
+          }
+          setDeleteTarget(null)
+          return
+        }
+
+        setSegs((p) => p.filter((s) => s.id !== target.id))
+        toast(`Segmen '${target.name}' berhasil dihapus permanen`)
+        await logAudit({
+          user_nama: userNama,
+          aksi: "Hapus",
+          tabel: "segmen",
+          objek: `segmen · ${target.name}`,
+          sebelum: { id: target.id, nama: target.name },
+          sesudah: {},
+        })
+      } else if (target.type === "Jalur") {
+        const { error } = await supabase
+          .from("jalur")
+          .delete()
+          .eq("id", target.id)
+
+        if (error) {
+          if (error.code === "23503") {
+            toast(
+              `Gagal menghapus: Jalur '${target.name}' memiliki riwayat perjalanan atau tarif. Silakan nonaktifkan saja.`,
+            )
+          } else {
+            toast(`Gagal menghapus jalur: ${error.message}`)
+          }
+          setDeleteTarget(null)
+          return
+        }
+
+        setJals((p) => p.filter((j) => j.id !== target.id))
+        toast(`Jalur '${target.name}' berhasil dihapus permanen`)
+        await logAudit({
+          user_nama: userNama,
+          aksi: "Hapus",
+          tabel: "jalur",
+          objek: `jalur · ${target.name}`,
+          sebelum: { id: target.id, nama: target.name },
+          sesudah: {},
+        })
+      } else if (target.type === "Kendaraan") {
+        const { error } = await supabase
+          .from("kendaraan")
+          .delete()
+          .eq("kode_cb", target.id)
+
+        if (error) {
+          if (error.code === "23503") {
+            toast(
+              `Gagal menghapus: Kendaraan '${target.name}' memiliki riwayat laporan perjalanan. Silakan nonaktifkan saja.`,
+            )
+          } else {
+            toast(`Gagal menghapus kendaraan: ${error.message}`)
+          }
+          setDeleteTarget(null)
+          return
+        }
+
+        setVehs((p) => p.filter((v) => v.cb !== target.id))
+        toast(`Kendaraan '${target.name}' berhasil dihapus permanen`)
+        await logAudit({
+          user_nama: userNama,
+          aksi: "Hapus",
+          tabel: "kendaraan",
+          objek: `kendaraan · ${target.name}`,
+          sebelum: { cb: target.id },
+          sesudah: {},
+        })
+      } else if (target.type === "Tarif") {
+        const { error } = await supabase
+          .from("tarif_jalur")
+          .delete()
+          .match({ jalur_id: target.id, berlaku_mulai: target.extra?.mulai })
+
+        if (error) {
+          toast(`Gagal menghapus tarif: ${error.message}`)
+          setDeleteTarget(null)
+          return
+        }
+
+        setTarifs((p) => p.filter((_, idx) => idx !== target.extra?.index))
+        toast(`Tarif '${target.name}' berhasil dihapus permanen`)
+        await logAudit({
+          user_nama: userNama,
+          aksi: "Hapus",
+          tabel: "tarif_jalur",
+          objek: `tarif · ${target.name}`,
+          sebelum: { jalur: target.id, mulai: target.extra?.mulai },
+          sesudah: {},
+        })
+      }
+    } catch (err) {
+      console.warn("Gagal hapus data master di Supabase:", err)
+      if (target.type === "Segmen") setSegs((p) => p.filter((s) => s.id !== target.id))
+      else if (target.type === "Jalur") setJals((p) => p.filter((j) => j.id !== target.id))
+      else if (target.type === "Kendaraan") setVehs((p) => p.filter((v) => v.cb !== target.id))
+      else if (target.type === "Tarif") setTarifs((p) => p.filter((_, idx) => idx !== target.extra?.index))
+      toast(`${target.type} '${target.name}' dihapus`)
+    }
+    setDeleteTarget(null)
+  }
+
   const save = async () => {
     if (tab === "Segmen") {
       const nama = f("nama").trim()
@@ -124,7 +258,7 @@ export default function MasterData({ toast }: Props) {
           aktif: true
         }, { onConflict: "kode" })
         await logAudit({
-          user_nama: "Koordinator",
+          user_nama: userNama,
           aksi: f("id") ? "Ubah" : "Tambah",
           tabel: "segmen",
           objek: `segmen · ${nama}`,
@@ -150,7 +284,7 @@ export default function MasterData({ toast }: Props) {
           setJals((p) => [...p, { id: newId, nama, segmentId: segmentKode, tarif: 0, aktif: true }])
         }
         await logAudit({
-          user_nama: "Koordinator",
+          user_nama: userNama,
           aksi: f("id") ? "Ubah" : "Tambah",
           tabel: "jalur",
           objek: `jalur · ${nama}`,
@@ -172,7 +306,7 @@ export default function MasterData({ toast }: Props) {
         supabase.from("kendaraan").insert({ kode_cb: cb, plat, aktif: true }).then(() => {})
       }
       logAudit({
-        user_nama: "Koordinator",
+        user_nama: userNama,
         aksi: f("id") ? "Ubah" : "Tambah",
         tabel: "kendaraan",
         objek: `kendaraan · ${cb}`,
@@ -195,7 +329,7 @@ export default function MasterData({ toast }: Props) {
           berlaku_mulai: mulai
         })
         await logAudit({
-          user_nama: "Koordinator",
+          user_nama: userNama,
           aksi: "Tambah",
           tabel: "tarif_jalur",
           objek: `tarif · ${jalurId}`,
@@ -219,32 +353,108 @@ export default function MasterData({ toast }: Props) {
           : !!f("tarif")
 
   const Aksi = ({
+    rowKey,
     onEdit,
     onToggle,
+    onDelete,
     aktif,
+    isNearBottom,
+    labelDelete,
   }: {
+    rowKey: string
     onEdit?: () => void
-    onToggle: () => void
-    aktif: boolean
+    onToggle?: () => void
+    onDelete?: () => void
+    aktif?: boolean
+    isNearBottom?: boolean
+    labelDelete?: string
   }) => (
-    <td className={cx(td, "whitespace-nowrap text-right")}>
-      {onEdit && (
+    <td className={cx(td, "w-28 whitespace-nowrap text-center")}>
+      <div className="relative inline-block text-left">
         <button
-          onClick={onEdit}
-          className="mr-3 text-sm font-semibold text-navy hover:underline"
+          type="button"
+          onClick={() => setActiveMenuId(activeMenuId === rowKey ? null : rowKey)}
+          className={cx(
+            "inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-wash focus:outline-hidden",
+            activeMenuId === rowKey && "border-navy/30 bg-wash ring-1 ring-navy/20",
+          )}
         >
-          Ubah
+          <span>Aksi</span>
+          <ChevronDown
+            size={13}
+            className={cx(
+              "text-mute transition-transform duration-150",
+              activeMenuId === rowKey && "rotate-180",
+            )}
+          />
         </button>
-      )}
-      <button
-        onClick={onToggle}
-        className={cx(
-          "text-sm font-semibold hover:underline",
-          aktif ? "text-red-700" : "text-emerald-700",
+        {activeMenuId === rowKey && (
+          <>
+            <div
+              className="fixed inset-0 z-20"
+              onClick={() => setActiveMenuId(null)}
+            />
+            <div
+              className={cx(
+                "absolute right-0 z-30 w-44 rounded-xl border border-line bg-white py-1 shadow-lg ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95",
+                isNearBottom ? "bottom-full mb-1" : "top-full mt-1",
+              )}
+            >
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMenuId(null)
+                    onEdit()
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-slate-50"
+                >
+                  <Pencil size={14} className="shrink-0 text-navy" />
+                  <span>Ubah</span>
+                </button>
+              )}
+              {onToggle !== undefined && aktif !== undefined && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMenuId(null)
+                    onToggle()
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-slate-50"
+                >
+                  {aktif ? (
+                    <>
+                      <EyeOff size={14} className="shrink-0 text-amber-600" />
+                      <span>Nonaktifkan</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye size={14} className="shrink-0 text-emerald-600" />
+                      <span>Aktifkan</span>
+                    </>
+                  )}
+                </button>
+              )}
+              {onDelete && (
+                <>
+                  <div className="my-1 border-t border-line/60" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveMenuId(null)
+                      onDelete()
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                  >
+                    <Trash2 size={14} className="shrink-0" />
+                    <span>{labelDelete || "Hapus"}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </>
         )}
-      >
-        {aktif ? "Nonaktifkan" : "Aktifkan"}
-      </button>
+      </div>
     </td>
   )
   const aktifBadge = (a: boolean) => (
@@ -260,10 +470,12 @@ export default function MasterData({ toast }: Props) {
     </span>
   )
 
+  const thCenter = cx(th.replace("text-left", ""), "text-center")
+
   return (
     <>
       <Title
-        sub="Nonaktifkan menggantikan hapus agar riwayat data tetap utuh."
+        sub="Kelola data master operasional. Gunakan tombol Aksi untuk mengubah, menonaktifkan, atau menghapus data."
         right={
           <Btn onClick={() => setForm({})}>
             <Plus size={16} /> Tambah
@@ -307,22 +519,45 @@ export default function MasterData({ toast }: Props) {
         </p>
       )}
 
-      <div className={tableWrap}>
+      <div className={cx(tableWrap, "min-h-[280px]")}>
         <table className="w-full min-w-[640px]">
           <thead className="border-b border-line bg-wash">
             <tr>
-              {(tab === "Segmen"
-                ? ["Segmen", "Jenis", "Nilai tetap", "Status", ""]
-                : tab === "Jalur"
-                  ? ["Jalur", "Segmen", "Tarif aktif", "Status", ""]
-                  : tab === "Tarif"
-                    ? ["Jalur", "Tarif", "Berlaku mulai", "Keterangan"]
-                    : ["Nomor CB", "Plat", "Status", ""]
-              ).map((h, i) => (
-                <th key={i} className={th}>
-                  {h}
-                </th>
-              ))}
+              {tab === "Segmen" && (
+                <>
+                  <th className={th}>Segmen</th>
+                  <th className={cx(th, "w-32")}>Jenis</th>
+                  <th className={cx(th, "w-48 whitespace-nowrap")}>Nilai tetap</th>
+                  <th className={cx(th, "w-28")}>Status</th>
+                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                </>
+              )}
+              {tab === "Jalur" && (
+                <>
+                  <th className={th}>Jalur</th>
+                  <th className={cx(th, "w-48")}>Segmen</th>
+                  <th className={cx(th, "w-40 whitespace-nowrap")}>Tarif aktif</th>
+                  <th className={cx(th, "w-28")}>Status</th>
+                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                </>
+              )}
+              {tab === "Tarif" && (
+                <>
+                  <th className={th}>Jalur</th>
+                  <th className={cx(th, "w-40 whitespace-nowrap")}>Tarif</th>
+                  <th className={cx(th, "w-40 whitespace-nowrap")}>Berlaku mulai</th>
+                  <th className={cx(th, "w-28")}>Keterangan</th>
+                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                </>
+              )}
+              {tab === "Kendaraan" && (
+                <>
+                  <th className={th}>Nomor CB</th>
+                  <th className={cx(th, "w-56")}>Plat</th>
+                  <th className={cx(th, "w-28")}>Status</th>
+                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -331,19 +566,23 @@ export default function MasterData({ toast }: Props) {
                 has(s.nama) ? (
                   <tr key={s.id} className="border-b border-line last:border-0">
                     <td className={cx(td, "font-medium")}>{s.nama}</td>
-                    <td className={td}>{s.kontrak ? "Kontrak" : "Reguler"}</td>
-                    <td className={cx(td, "num")}>
+                    <td className={cx(td, "w-32")}>{s.kontrak ? "Kontrak" : "Reguler"}</td>
+                    <td className={cx(td, "w-48 whitespace-nowrap num")}>
                       {s.kontrak ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Lock size={12} /> {rupiah(s.nilaiTetap)}
+                        <span className="inline-flex items-center gap-1.5 font-medium text-ink">
+                          <Lock size={12} className="shrink-0 text-slate-400" />
+                          <span>{rupiah(s.nilaiTetap)}</span>
                         </span>
                       ) : (
-                        "–"
+                        <span className="text-mute font-sans">–</span>
                       )}
                     </td>
-                    <td className={td}>{aktifBadge(s.aktif)}</td>
+                    <td className={cx(td, "w-28")}>{aktifBadge(s.aktif)}</td>
                     <Aksi
+                      rowKey={`seg_${s.id}`}
                       aktif={s.aktif}
+                      isNearBottom={i >= segs.length - 2}
+                      labelDelete="Hapus Segmen"
                       onEdit={() => (
                         setTab("Segmen"),
                         setForm({
@@ -354,6 +593,7 @@ export default function MasterData({ toast }: Props) {
                         })
                       )}
                       onToggle={() => toggle(segs, setSegs, i)}
+                      onDelete={() => setDeleteTarget({ type: "Segmen", id: s.id, name: s.nama })}
                     />
                   </tr>
                 ) : null,
@@ -363,13 +603,16 @@ export default function MasterData({ toast }: Props) {
                 has(j.nama) ? (
                   <tr key={j.id} className="border-b border-line last:border-0">
                     <td className={cx(td, "font-medium")}>{j.nama}</td>
-                    <td className={td}>{seg(j.segmentId).nama}</td>
-                    <td className={cx(td, "num")}>
-                      {j.tarif ? rupiah(j.tarif) : "Nilai tetap"}
+                    <td className={cx(td, "w-48")}>{seg(j.segmentId).nama}</td>
+                    <td className={cx(td, "w-40 whitespace-nowrap num")}>
+                      {j.tarif ? rupiah(j.tarif) : <span className="text-mute font-sans">Nilai tetap</span>}
                     </td>
-                    <td className={td}>{aktifBadge(j.aktif)}</td>
+                    <td className={cx(td, "w-28")}>{aktifBadge(j.aktif)}</td>
                     <Aksi
+                      rowKey={`jal_${j.id}`}
                       aktif={j.aktif}
+                      isNearBottom={i >= jals.length - 2}
+                      labelDelete="Hapus Jalur"
                       onEdit={() =>
                         setForm({
                           id: j.id,
@@ -378,6 +621,7 @@ export default function MasterData({ toast }: Props) {
                         })
                       }
                       onToggle={() => toggle(jals, setJals, i)}
+                      onDelete={() => setDeleteTarget({ type: "Jalur", id: j.id, name: j.nama })}
                     />
                   </tr>
                 ) : null,
@@ -390,36 +634,63 @@ export default function MasterData({ toast }: Props) {
                     b.mulai.localeCompare(a.mulai),
                 )
                 .filter((x) => has(jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama))
-                .map((x, i, arr) => (
-                  <tr key={i} className="border-b border-line last:border-0">
-                    <td className={td}>{jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama}</td>
-                    <td className={cx(td, "num")}>{rupiah(x.tarif)}</td>
-                    <td className={cx(td, "num")}>{fmtDate(x.mulai)}</td>
-                    <td className={td}>
-                      {arr.find((y) => y.jalurId === x.jalurId)?.mulai ===
-                      x.mulai ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                          Berlaku
-                        </span>
-                      ) : (
-                        <span className="text-xs text-mute">Riwayat</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                .map((x, i, arr) => {
+                  const jalurNama = jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama
+                  return (
+                    <tr key={i} className="border-b border-line last:border-0">
+                      <td className={cx(td, "font-medium")}>{jalurNama}</td>
+                      <td className={cx(td, "w-40 whitespace-nowrap num")}>{rupiah(x.tarif)}</td>
+                      <td className={cx(td, "w-40 whitespace-nowrap num")}>{fmtDate(x.mulai)}</td>
+                      <td className={cx(td, "w-28")}>
+                        {arr.find((y) => y.jalurId === x.jalurId)?.mulai ===
+                        x.mulai ? (
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                            Berlaku
+                          </span>
+                        ) : (
+                          <span className="text-xs text-mute">Riwayat</span>
+                        )}
+                      </td>
+                      <Aksi
+                        rowKey={`tar_${x.jalurId}_${x.mulai}_${i}`}
+                        isNearBottom={i >= arr.length - 2}
+                        labelDelete="Hapus Tarif"
+                        onEdit={() =>
+                          setForm({
+                            jalurId: x.jalurId,
+                            tarif: String(x.tarif),
+                            mulai: x.mulai,
+                          })
+                        }
+                        onDelete={() =>
+                          setDeleteTarget({
+                            type: "Tarif",
+                            id: x.jalurId,
+                            name: `${jalurNama} - ${rupiah(x.tarif)} (${fmtDate(x.mulai)})`,
+                            extra: { mulai: x.mulai, index: i },
+                          })
+                        }
+                      />
+                    </tr>
+                  )
+                })}
             {tab === "Kendaraan" &&
               vehs.map((v, i) =>
                 has(v.cb + v.plat) ? (
                   <tr key={v.cb} className="border-b border-line last:border-0">
                     <td className={cx(td, "num font-medium")}>{v.cb}</td>
-                    <td className={cx(td, "num")}>{v.plat}</td>
-                    <td className={td}>{aktifBadge(v.aktif)}</td>
+                    <td className={cx(td, "w-56 num")}>{v.plat}</td>
+                    <td className={cx(td, "w-28")}>{aktifBadge(v.aktif)}</td>
                     <Aksi
+                      rowKey={`veh_${v.cb}`}
                       aktif={v.aktif}
+                      isNearBottom={i >= vehs.length - 2}
+                      labelDelete="Hapus Kendaraan"
                       onEdit={() =>
                         setForm({ id: v.cb, cb: v.cb, plat: v.plat })
                       }
                       onToggle={() => toggle(vehs, setVehs, i)}
+                      onDelete={() => setDeleteTarget({ type: "Kendaraan", id: v.cb, name: `${v.cb} (${v.plat})` })}
                     />
                   </tr>
                 ) : null,
@@ -548,6 +819,31 @@ export default function MasterData({ toast }: Props) {
             </>
           )}
         </div>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteTarget}
+        danger
+        title={`Hapus ${deleteTarget?.type}?`}
+        onClose={() => setDeleteTarget(null)}
+        actions={
+          <>
+            <Btn variant="outline" onClick={() => setDeleteTarget(null)}>
+              Batal
+            </Btn>
+            <Btn variant="danger" onClick={confirmDelete}>
+              Ya, hapus permanen
+            </Btn>
+          </>
+        }
+      >
+        <p>
+          Apakah Anda yakin ingin menghapus {deleteTarget?.type.toLowerCase()}{" "}
+          <b className="font-semibold text-ink">{deleteTarget?.name}</b> secara permanen?
+        </p>
+        <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+          <strong>Peringatan:</strong> Tindakan ini akan menghapus data dari master operasional secara permanen dan tidak dapat dibatalkan. Jika data pernah digunakan dalam riwayat perjalanan terdahulu, disarankan untuk memilih opsi <em>Nonaktifkan</em> agar laporan masa lalu tetap utuh.
+        </p>
       </Dialog>
     </>
   )

@@ -28,13 +28,13 @@ const ROLES = {
     label: "Sopir",
     icon: Bus,
     desc: "Catat keberangkatan, isi hasil perjalanan, dan kirim untuk diverifikasi.",
-    hint: "Untuk pengemudi bus. Dipakai di ponsel.",
+    hint: "Untuk pengemudi bus.",
   },
   koordinator: {
     label: "Koordinator (Admin)",
     icon: ClipboardCheck,
-    desc: "Verifikasi data sopir, lihat dashboard, ekspor AK 15, dan kelola data master serta akun.",
-    hint: "Untuk petugas lapangan dan admin. Dipakai di laptop.",
+    desc: "Verifikasi data sopir, lihat dashboard, ekspor laporan, dan kelola data master serta akun.",
+    hint: "Untuk petugas lapangan dan admin.",
   },
 } as const
 
@@ -415,7 +415,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
               </p>
               <div className="rounded-lg bg-white/10 p-3 text-xs text-white/70">
                 <p className="mb-2 font-semibold text-white">
-                  Akun demo (sandi: damri123)
+                  Akun demo
                 </p>
                 <div className="flex gap-2">
                   {(["sopir", "koordinator"] as const).map((k) => (
@@ -487,7 +487,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
                 <Field
                   light
                   label="Kode registrasi koordinator"
-                  hint="Diberikan oleh admin cabang. Demo: DAMRI-KOORD"
+                  hint="Diberikan oleh admin cabang."
                 >
                   <input
                     value={kode}

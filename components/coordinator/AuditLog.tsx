@@ -38,7 +38,7 @@ export default function AuditLog() {
 
   return (
     <>
-      <Title sub="Hanya baca. Catatan tidak dapat diubah atau dihapus.">
+      <Title sub="Catatan tidak dapat diubah atau dihapus.">
         Audit Log
       </Title>
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -36,7 +36,7 @@ export default function LaporanOperasional({ deps, toast }: Props) {
     setBusy(true)
     try {
       await exportLaporanAK15(deps, r.range[0], r.range[1], segments, jalurList)
-      toast("AK15_" + r.range[0] + "_" + r.range[1] + ".xlsx berhasil diunduh")
+      toast("Laporan Produksi Bus " + r.range[0] + "_" + r.range[1] + ".xlsx berhasil diunduh")
     } catch (err) {
       console.error("Gagal mengunduh berkas Excel:", err)
       toast("Gagal memproses unduhan Excel")
@@ -47,7 +47,7 @@ export default function LaporanOperasional({ deps, toast }: Props) {
 
   return (
     <>
-      <Title sub="Susunan mengikuti formulir AK 15. Struktur blok final akan dikonfirmasi dengan berkas contoh DAMRI.">
+      <Title sub="Susunan mengikuti formulir Laporan Produksi Bus.">
         Laporan / Ekspor
       </Title>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -58,7 +58,7 @@ export default function LaporanOperasional({ deps, toast }: Props) {
           ) : (
             <Download size={16} />
           )}
-          {busy ? "Menyiapkan…" : "Unduh .xlsx (susunan AK 15)"}
+          {busy ? "Menyiapkan…" : "Unduh Laporan Produksi.xlsx"}
         </Btn>
       </div>
       <h2 className="mb-3 mt-8 text-xs font-bold uppercase tracking-widest text-navy">

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useRef, useState } from "react"
@@ -290,8 +291,8 @@ export default function Coordinator({
           {page === "laporan" && (
             <LaporanOperasional deps={deps} toast={toast} />
           )}
-          {page === "master" && <MasterData toast={toast} />}
-          {page === "akun" && <ManajemenAkun toast={toast} />}
+          {page === "master" && <MasterData toast={toast} currentUser={currentUser} />}
+          {page === "akun" && <ManajemenAkun toast={toast} currentUser={currentUser} />}
           {page === "arsip" && <ArsipBackup toast={toast} deps={deps} />}
           {page === "audit" && <AuditLog />}
           {page === "profil" && (
@@ -402,6 +403,9 @@ export default function Coordinator({
                   </button>
                 )}
               </div>
+              <p className="mt-1.5 text-[11px] text-mute">
+                Format: JPG, PNG, atau WebP (Maks. 5 MB)
+              </p>
             </div>
           </div>
           <Field label="Nama lengkap">

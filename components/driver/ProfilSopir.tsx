@@ -299,6 +299,9 @@ export default function ProfilSopir({
                   </button>
                 )}
               </div>
+              <p className="mt-1.5 text-[11px] text-mute">
+                Format: JPG, PNG, atau WebP (Maks. 5 MB)
+              </p>
             </div>
           </div>
           <Field label="Nama lengkap">
