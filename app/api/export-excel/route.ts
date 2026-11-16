@@ -53,6 +53,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Fallback untuk environment serverless (Vercel/Netlify) di mana public/ disajikan oleh CDN
+    if (!templateBuf) {
+      try {
+        const origin = req.nextUrl.origin
+        const res = await fetch(`${origin}/template_laporan_excel.xlsx`)
+        if (res.ok) {
+          const ab = await res.arrayBuffer()
+          templateBuf = Buffer.from(ab)
+        }
+      } catch (e) {
+        console.warn("Gagal fetch template via origin:", e)
+      }
+    }
+
     if (!templateBuf) {
       return NextResponse.json(
         { error: "Template Excel laporan tidak ditemukan di server" },
