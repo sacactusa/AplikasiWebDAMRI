@@ -59,7 +59,7 @@ export default function Driver({
     }
     if (currentUser) {
       return {
-        nama: currentUser.nama || ME,
+        nama: currentUser.nama || (currentUser.email === "sopir@damri.co.id" ? ME : "Sopir"),
         email: currentUser.email || "sopir@damri.co.id",
         telepon: "0813 2456 7890",
         foto: DRIVER_PHOTO,
@@ -152,6 +152,7 @@ export default function Driver({
             deps={deps}
             offline={offline}
             driverName={profile.nama}
+            currentUser={currentUser}
             onCancel={() => setView({ n: lastTabRef.current })}
             onSave={async (d) => {
               setDeps((p) => [d, ...p])

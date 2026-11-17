@@ -52,12 +52,14 @@ export default function App() {
     }
     if (u) {
       setCurrentUser(u)
-      getDepartures(false)
-        .then((live) => setDeps(live))
-        .catch(() => {
-          const userIsDemo = u.email === "koordinator@damri.co.id" || u.email === "sopir@damri.co.id"
-          if (userIsDemo) setDeps(SEED)
-        })
+      const userIsDemo = u.email === "koordinator@damri.co.id" || u.email === "sopir@damri.co.id"
+      if (userIsDemo) {
+        setDeps(SEED)
+      } else {
+        getDepartures(false)
+          .then((live) => setDeps(live))
+          .catch(() => setDeps([]))
+      }
     }
   }, [])
 
@@ -91,13 +93,13 @@ export default function App() {
   const isDemo = isDemoCoordinator || isDemoDriver
 
   useEffect(() => {
-    // Jalankan timer simulasi demo HANYA saat offline
-    if (offline && role === "sopir" && isDemoDriver) {
+    // Jalankan timer simulasi demo HANYA untuk akun demo
+    if (role === "sopir" && isDemoDriver) {
       const seeded = SEED.find((d) => d.driver === ME && d.status === "dikirim")
       const t = seeded && setTimeout(() => approveMine(seeded.id), 15000)
       return () => t && clearTimeout(t)
     }
-    if (offline && role === "koordinator" && isDemoCoordinator) {
+    if (role === "koordinator" && isDemoCoordinator) {
       const i = setInterval(() => {
         const src = INCOMING[incoming.current % INCOMING.length]
         incoming.current++
@@ -105,30 +107,34 @@ export default function App() {
       }, 20000)
       return () => clearInterval(i)
     }
-  }, [role, offline, approveMine, isDemoCoordinator, isDemoDriver])
+  }, [role, approveMine, isDemoCoordinator, isDemoDriver])
 
   // Initial fetch & background sync
   useEffect(() => {
     if (!role) return
-    getDepartures(false)
-      .then((liveDeps) => {
-        setDeps(liveDeps)
-      })
-      .catch(() => {
-        if (isDemo) setDeps(SEED)
-      })
+    if (isDemo) {
+      setDeps(SEED)
+    } else {
+      getDepartures(false)
+        .then((liveDeps) => {
+          setDeps(liveDeps)
+        })
+        .catch(() => {
+          setDeps([])
+        })
+    }
   }, [role, currentUser?.email, isDemo])
 
-  // Polling data Supabase agar selalu sinkron
+  // Polling data Supabase untuk akun riil agar selalu sinkron
   useEffect(() => {
-    if (!role || offline) return
+    if (!role || isDemo || offline) return
     const interval = setInterval(() => {
       getDepartures(false).then((live) => {
         setDeps(live)
       })
     }, 10000)
     return () => clearInterval(interval)
-  }, [role, offline])
+  }, [role, isDemo, offline])
 
 
 

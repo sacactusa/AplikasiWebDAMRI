@@ -30,20 +30,22 @@ import {
 interface Props {
   deps: Departure[]
   go: (p: Page) => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 
-export default function DashboardAnalitik({ deps, go }: Props) {
+export default function DashboardAnalitik({ deps, go, currentUser }: Props) {
+  const isDemo = currentUser?.email === "koordinator@damri.co.id"
   const r = useRange()
   const [sg, setSg] = useState("all")
-  const [segments, setSegments] = useState<Segment[]>(SEGMENTS)
-  const [jalurList, setJalurList] = useState<Jalur[]>(JALUR)
+  const [segments, setSegments] = useState<Segment[]>(isDemo ? SEGMENTS : [])
+  const [jalurList, setJalurList] = useState<Jalur[]>(isDemo ? JALUR : [])
 
   useEffect(() => {
-    getMasterData().then((m) => {
+    getMasterData(isDemo).then((m) => {
       setSegments(m.segments || [])
       setJalurList(m.jalurList || [])
     })
-  }, [])
+  }, [isDemo])
   const approved = deps.filter(
     (d) =>
       d.status === "disetujui" && d.date >= r.range[0] && d.date <= r.range[1],

@@ -1,13 +1,12 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Check, ChevronRight, Download, LayoutDashboard, X } from "lucide-react"
-import type { Departure } from "@/lib/data"
+import type { Departure, Segment, Jalur } from "@/lib/data"
 import {
   DRIVERS,
-  JALUR,
   SEGMENTS,
-  VEHICLES,
+  JALUR,
   calc,
   fmtDate,
   jalur,
@@ -28,7 +27,7 @@ import {
   inputCls,
 } from "@/components/ui"
 import { Title, th, td, tableWrap, type Page } from "./shared"
-import { approveDeparture, rejectDeparture } from "@/lib/supabaseService"
+import { approveDeparture, rejectDeparture, getMasterData } from "@/lib/supabaseService"
 
 interface Props {
   deps: Departure[]
@@ -36,8 +35,10 @@ interface Props {
   toast: (t: string, type?: "success" | "error") => void
   go: (p: Page) => void
   clearNew: () => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
-export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clearNew }: Props) {
+export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clearNew, currentUser }: Props) {
+  const isDemo = currentUser?.email === "koordinator@damri.co.id"
   const [fd, setFd] = useState("")
   const [fs, setFs] = useState("")
   const [fj, setFj] = useState("")
@@ -47,10 +48,19 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
   const [bulk, setBulk] = useState(false)
   const [rej, setRej] = useState<string | null>(null)
   const [note, setNote] = useState("")
+  const [segments, setSegments] = useState<Segment[]>(isDemo ? SEGMENTS : [])
+  const [jalurList, setJalurList] = useState<Jalur[]>(isDemo ? JALUR : [])
+
+  useEffect(() => {
+    getMasterData(isDemo).then((m) => {
+      setSegments(m.segments || [])
+      setJalurList(m.jalurList || [])
+    })
+  }, [isDemo])
 
   const driverOptions = useMemo(
-    () => Array.from(new Set([...DRIVERS, ...deps.map((d) => d.driver).filter(Boolean)])),
-    [deps],
+    () => Array.from(new Set([...(isDemo ? DRIVERS : []), ...deps.map((d) => d.driver).filter(Boolean)])),
+    [deps, isDemo],
   )
 
   const rows = useMemo(
@@ -165,7 +175,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           className={cx(inputCls(), "h-11")}
         >
           <option value="">Semua segmen</option>
-          {SEGMENTS.map((s) => (
+          {segments.map((s) => (
             <option key={s.id} value={s.id}>
               {s.nama}
             </option>
@@ -178,7 +188,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           className={cx(inputCls(), "h-11")}
         >
           <option value="">Semua jalur</option>
-          {JALUR.filter((j) => !fs || j.segmentId === fs).map((j) => (
+          {jalurList.filter((j) => !fs || j.segmentId === fs).map((j) => (
             <option key={j.id} value={j.id}>
               {j.nama}
             </option>

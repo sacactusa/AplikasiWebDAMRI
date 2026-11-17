@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Lock, Plus, ChevronDown, Pencil, Eye, EyeOff, Trash2, LoaderCircle } from "lucide-react"
 import type { Segment, Jalur, Vehicle } from "@/lib/data"
-import { TODAY, rupiah, jalur, seg, fmtDate } from "@/lib/data"
+import { SEGMENTS, JALUR, VEHICLES, TODAY, rupiah, jalur, seg, fmtDate } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
 import { getMasterData, logAudit } from "@/lib/supabaseService"
@@ -20,20 +20,36 @@ interface Tarif {
 }
 
 export default function MasterData({ toast, currentUser }: Props) {
+  const isDemo = currentUser?.email === "koordinator@damri.co.id"
   const [tab, setTab] = useState<"Segmen" | "Jalur" | "Tarif" | "Kendaraan">(
     "Segmen",
   )
   const [q, setQ] = useState("")
-  const [segs, setSegs] = useState<Segment[]>([])
-  const [jals, setJals] = useState<Jalur[]>([])
-  const [vehs, setVehs] = useState<Vehicle[]>([])
-  const [tarifs, setTarifs] = useState<Tarif[]>([])
-  const [loading, setLoading] = useState(true)
+  const [segs, setSegs] = useState<Segment[]>(isDemo ? SEGMENTS : [])
+  const [jals, setJals] = useState<Jalur[]>(isDemo ? JALUR : [])
+  const [vehs, setVehs] = useState<Vehicle[]>(isDemo ? VEHICLES : [])
+  const [tarifs, setTarifs] = useState<Tarif[]>(
+    isDemo
+      ? [
+          ...JALUR.filter((j) => j.tarif).map((j) => ({
+            jalurId: j.id,
+            tarif: j.tarif,
+            mulai: "2026-10-01",
+          })),
+          { jalurId: "j1", tarif: 140000, mulai: "2026-01-01" },
+          { jalurId: "j2", tarif: 150000, mulai: "2026-01-01" },
+          { jalurId: "j5", tarif: 80000, mulai: "2025-07-01" },
+        ]
+      : [],
+  )
+  const [loading, setLoading] = useState(!isDemo)
 
   useEffect(() => {
+    if (isDemo) return
+
     setLoading(true)
     Promise.all([
-      getMasterData().then((m) => {
+      getMasterData(false).then((m) => {
         setSegs(m.segments || [])
         setJals(m.jalurList || [])
         setVehs(m.vehicles || [])
@@ -58,7 +74,7 @@ export default function MasterData({ toast, currentUser }: Props) {
     ]).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [isDemo])
   const [form, setForm] = useState<null | Record<string, string>>(null)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{

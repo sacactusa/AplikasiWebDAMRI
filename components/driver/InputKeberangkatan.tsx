@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import type { Departure, Jalur, Segment, Vehicle } from "@/lib/data"
-import { JALUR, ME, SEGMENTS, TODAY, VEHICLES, seg, uid } from "@/lib/data"
+import { JALUR, ME, SEGMENTS, VEHICLES, seg, uid } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { TopBar } from "./shared"
 import { getMasterData } from "@/lib/supabaseService"
@@ -13,6 +13,7 @@ interface Props {
   onCancel: () => void
   onSave: (d: Departure) => void
   driverName?: string
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 
 export default function InputKeberangkatan({
@@ -21,23 +22,30 @@ export default function InputKeberangkatan({
   onCancel,
   onSave,
   driverName,
+  currentUser,
 }: Props) {
-  const currentDriver = driverName || ME
-  const [date, setDate] = useState(TODAY)
-  const [time, setTime] = useState("08:00")
-  const [segments, setSegments] = useState<Segment[]>(SEGMENTS)
-  const [jalurList, setJalurList] = useState<Jalur[]>(JALUR)
-  const [vehicles, setVehicles] = useState<Vehicle[]>(VEHICLES)
+  const isDemoDriver = currentUser?.email === "sopir@damri.co.id"
+  const currentDriver = driverName || (isDemoDriver ? ME : "Sopir")
+  // Tanggal hari ini real-time (format YYYY-MM-DD, zona waktu lokal)
+  const todayReal = new Date().toISOString().slice(0, 10)
+  const [date, setDate] = useState(todayReal)
+  const [time, setTime] = useState(() => {
+    const now = new Date()
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
+  })
+  const [segments, setSegments] = useState<Segment[]>(isDemoDriver ? SEGMENTS : [])
+  const [jalurList, setJalurList] = useState<Jalur[]>(isDemoDriver ? JALUR : [])
+  const [vehicles, setVehicles] = useState<Vehicle[]>(isDemoDriver ? VEHICLES : [])
 
-  const [segmentId, setSegmentId] = useState("bandara")
-  const [jalurId, setJalurId] = useState("j1")
+  const [segmentId, setSegmentId] = useState(isDemoDriver ? "bandara" : "")
+  const [jalurId, setJalurId] = useState(isDemoDriver ? "j1" : "")
   const [veh, setVeh] = useState("")
   const [dup, setDup] = useState(false)
   const [tried, setTried] = useState(false)
 
   // Ambil data master terkini dari Supabase
   useEffect(() => {
-    getMasterData().then((m) => {
+    getMasterData(isDemoDriver).then((m) => {
       setSegments(m.segments || [])
       if (m.segments?.length) {
         setSegmentId((prev) => m.segments.find((s) => s.id === prev)?.id || m.segments[0].id)
@@ -47,7 +55,7 @@ export default function InputKeberangkatan({
       setJalurList(m.jalurList || [])
       setVehicles(m.vehicles || [])
     })
-  }, [])
+  }, [isDemoDriver])
 
   const jalurOpts = useMemo(() => {
     const filtered = jalurList.filter(
@@ -123,6 +131,7 @@ export default function InputKeberangkatan({
             <input
               type="date"
               value={date}
+              min={todayReal}
               onChange={(e) => setDate(e.target.value)}
               className={inputCls()}
             />

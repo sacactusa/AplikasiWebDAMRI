@@ -283,18 +283,19 @@ export default function Coordinator({
               toast={toast}
               go={setPage}
               clearNew={clearNew}
+              currentUser={currentUser}
             />
           )}
           {page === "dashboard" && (
-            <DashboardAnalitik deps={deps} go={setPage} />
+            <DashboardAnalitik deps={deps} go={setPage} currentUser={currentUser} />
           )}
           {page === "laporan" && (
-            <LaporanOperasional deps={deps} toast={toast} />
+            <LaporanOperasional deps={deps} toast={toast} currentUser={currentUser} />
           )}
           {page === "master" && <MasterData toast={toast} currentUser={currentUser} />}
           {page === "akun" && <ManajemenAkun toast={toast} currentUser={currentUser} />}
-          {page === "arsip" && <ArsipBackup toast={toast} deps={deps} />}
-          {page === "audit" && <AuditLog />}
+          {page === "arsip" && <ArsipBackup toast={toast} deps={deps} currentUser={currentUser} />}
+          {page === "audit" && <AuditLog currentUser={currentUser} />}
           {page === "profil" && (
             <ProfilKoordinator
               profile={profile}

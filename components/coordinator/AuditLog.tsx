@@ -6,8 +6,13 @@ import { DateInput, Drawer, Empty, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
 import { getAuditLogs, type AuditItem } from "@/lib/supabaseService"
 
-export default function AuditLog() {
-  const [logs, setLogs] = useState<AuditItem[]>(AUDIT)
+interface Props {
+  currentUser?: { nama: string; email: string; id?: string } | null
+}
+
+export default function AuditLog({ currentUser }: Props) {
+  const isDemo = currentUser?.email === "koordinator@damri.co.id"
+  const [logs, setLogs] = useState<AuditItem[]>(isDemo ? AUDIT : [])
   const [u, setU] = useState("")
   const [a, setA] = useState("")
   const [from, setFrom] = useState("")
@@ -15,12 +20,12 @@ export default function AuditLog() {
   const [open, setOpen] = useState<AuditItem | null>(null)
 
   useEffect(() => {
-    getAuditLogs().then((res) => {
-      if (res && res.length > 0) {
+    getAuditLogs(isDemo).then((res) => {
+      if (res) {
         setLogs(res)
       }
     })
-  }, [])
+  }, [isDemo])
 
   const getIsoDate = (x: AuditItem) => (x.rawTime ? x.rawTime.slice(0, 10) : "2026-10-" + x.t.slice(0, 2))
   const list = logs.filter(

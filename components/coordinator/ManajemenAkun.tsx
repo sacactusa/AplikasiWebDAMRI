@@ -14,46 +14,58 @@ interface Props {
 }
 
 export default function ManajemenAkun({ toast, currentUser }: Props) {
-  const [users, setUsers] = useState([
-    {
-      n: "Rina Marlina",
-      e: "rina.marlina@damri.co.id",
-      p: "Koordinator/Admin",
-      a: true,
-    },
-    {
-      n: "Budi Hartono",
-      e: "budi.hartono@damri.co.id",
-      p: "Koordinator/Admin",
-      a: true,
-    },
-    ...DRIVERS.map((d) => ({
-      n: d,
-      e: d.toLowerCase().replace(" ", ".") + "@damri.co.id",
-      p: "Sopir",
-      a: true,
-    })),
-    {
-      n: "Cecep Hidayat",
-      e: "cecep.hidayat@damri.co.id",
-      p: "Sopir",
-      a: false,
-    },
-  ])
+  const isDemo = currentUser?.email === "koordinator@damri.co.id"
+  const [users, setUsers] = useState(
+    isDemo
+      ? [
+          {
+            n: "Rina Marlina",
+            e: "rina.marlina@damri.co.id",
+            p: "Koordinator/Admin",
+            a: true,
+          },
+          {
+            n: "Budi Hartono",
+            e: "budi.hartono@damri.co.id",
+            p: "Koordinator/Admin",
+            a: true,
+          },
+          ...DRIVERS.map((d) => ({
+            n: d,
+            e: d.toLowerCase().replace(" ", ".") + "@damri.co.id",
+            p: "Sopir",
+            a: true,
+          })),
+          {
+            n: "Cecep Hidayat",
+            e: "cecep.hidayat@damri.co.id",
+            p: "Sopir",
+            a: false,
+          },
+        ]
+      : [],
+  )
+
   useEffect(() => {
-    supabase.from("profiles").select("*").order("created_at", { ascending: false }).then(({ data, error }) => {
-      if (!error && data) {
-        setUsers(
-          data.map((p) => ({
-            n: p.nama,
-            e: p.email,
-            p: p.role === "koordinator" ? "Koordinator/Admin" : "Sopir",
-            a: p.aktif ?? true,
-          }))
-        )
-      }
-    })
-  }, [])
+    if (isDemo) return
+
+    supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setUsers(
+            data.map((p) => ({
+              n: p.nama,
+              e: p.email,
+              p: p.role === "koordinator" ? "Koordinator/Admin" : "Sopir",
+              a: p.aktif ?? true,
+            })),
+          )
+        }
+      })
+  }, [isDemo])
 
   const [add, setAdd] = useState(false)
   const [nu, setNu] = useState({ n: "", e: "", p: "Sopir" })
@@ -98,8 +110,15 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
             </tr>
           </thead>
           <tbody>
-            {users.map((u, i) => (
-              <tr key={u.e} className="border-b border-line last:border-0">
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-12 text-center text-sm text-mute">
+                  Belum ada akun terdaftar di database. Klik tombol &ldquo;Tambah Akun&rdquo; di atas untuk membuat akun baru.
+                </td>
+              </tr>
+            ) : (
+              users.map((u, i) => (
+                <tr key={u.e} className="border-b border-line last:border-0">
                 <td className={cx(td, "font-medium")}>{u.n}</td>
                 <td className={cx(td, "text-mute")}>{u.e}</td>
                 <td className={cx(td, "w-48")}>
@@ -275,7 +294,8 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                   </div>
                 </td>
               </tr>
-            ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>

@@ -46,11 +46,15 @@ export function formatAuditTime(isoStr: string): string {
  * Mengambil data Master (Segmen, Jalur, Kendaraan) dari Supabase
  * dengan fallback ke data lokal jika offline atau terjadi kendala jaringan.
  */
-export async function getMasterData(): Promise<{
+export async function getMasterData(isDemo = false): Promise<{
   segments: Segment[]
   jalurList: Jalur[]
   vehicles: Vehicle[]
 }> {
+  if (isDemo) {
+    return { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES }
+  }
+
   try {
     const [segRes, jalRes, vehRes, tarRes] = await Promise.all([
       supabase.from("segmen").select("*").order("nama"),
@@ -62,14 +66,14 @@ export async function getMasterData(): Promise<{
         .order("berlaku_mulai", { ascending: false }),
     ])
 
-    // Fallback ke data lokal HANYA jika terjadi error koneksi ke Supabase
+    // Jika terjadi error koneksi ke Supabase, kembalikan array kosong untuk akun riil
     if (segRes.error || jalRes.error || vehRes.error) {
       console.warn("Gagal memuat master data dari Supabase (koneksi/skema bermasalah):", {
         seg: segRes.error,
         jal: jalRes.error,
         veh: vehRes.error,
       })
-      return { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES }
+      return { segments: [], jalurList: [], vehicles: [] }
     }
 
     // Map Segmen (jika kosong, tetap kembalikan array kosong [])
@@ -120,11 +124,8 @@ export async function getMasterData(): Promise<{
       vehicles,
     }
   } catch (err) {
-    console.warn(
-      "Gagal memuat master data dari Supabase, menggunakan fallback lokal:",
-      err,
-    )
-    return { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES }
+    console.warn("Gagal memuat master data dari Supabase:", err)
+    return isDemo ? { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES } : { segments: [], jalurList: [], vehicles: [] }
   }
 }
 
@@ -456,7 +457,11 @@ export async function rejectDeparture(
 /**
  * Mengambil riwayat Audit Log dari tabel audit_log Supabase
  */
-export async function getAuditLogs(): Promise<AuditItem[]> {
+export async function getAuditLogs(isDemo = false): Promise<AuditItem[]> {
+  if (isDemo) {
+    return AUDIT
+  }
+
   try {
     const { data, error } = await supabase
       .from("audit_log")
@@ -464,8 +469,8 @@ export async function getAuditLogs(): Promise<AuditItem[]> {
       .order("waktu", { ascending: false })
       .limit(100)
 
-    if (error || !data || data.length === 0) {
-      return AUDIT
+    if (error || !data) {
+      return []
     }
 
     return data.map((row) => ({
@@ -480,7 +485,7 @@ export async function getAuditLogs(): Promise<AuditItem[]> {
     }))
   } catch (err) {
     console.warn("Gagal mengambil audit log dari Supabase:", err)
-    return AUDIT
+    return []
   }
 }
 
