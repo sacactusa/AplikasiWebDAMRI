@@ -40,8 +40,8 @@ export default function DashboardAnalitik({ deps, go }: Props) {
 
   useEffect(() => {
     getMasterData().then((m) => {
-      if (m.segments?.length) setSegments(m.segments)
-      if (m.jalurList?.length) setJalurList(m.jalurList)
+      setSegments(m.segments || [])
+      setJalurList(m.jalurList || [])
     })
   }, [])
   const approved = deps.filter(

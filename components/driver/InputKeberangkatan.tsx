@@ -38,16 +38,14 @@ export default function InputKeberangkatan({
   // Ambil data master terkini dari Supabase
   useEffect(() => {
     getMasterData().then((m) => {
+      setSegments(m.segments || [])
       if (m.segments?.length) {
-        setSegments(m.segments)
         setSegmentId((prev) => m.segments.find((s) => s.id === prev)?.id || m.segments[0].id)
+      } else {
+        setSegmentId("")
       }
-      if (m.jalurList?.length) {
-        setJalurList(m.jalurList)
-      }
-      if (m.vehicles?.length) {
-        setVehicles(m.vehicles)
-      }
+      setJalurList(m.jalurList || [])
+      setVehicles(m.vehicles || [])
     })
   }, [])
 

@@ -28,19 +28,7 @@ export default function App() {
     }
     return null
   })
-  const [deps, setDeps] = useState<Departure[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const s = sessionStorage.getItem("damri_current_user")
-        if (s) {
-          const user = JSON.parse(s)
-          const isDemoUser = user.email === "koordinator@damri.co.id" || user.email === "sopir@damri.co.id"
-          if (!isDemoUser) return []
-        }
-      } catch {}
-    }
-    return SEED
-  })
+  const [deps, setDeps] = useState<Departure[]>([])
   const [offline, setOffline] = useState(() =>
     typeof navigator !== "undefined" ? !navigator.onLine : false,
   )
@@ -64,12 +52,12 @@ export default function App() {
     }
     if (u) {
       setCurrentUser(u)
-      const userIsDemo = u.email === "koordinator@damri.co.id" || u.email === "sopir@damri.co.id"
-      if (userIsDemo) {
-        setDeps(SEED)
-      } else {
-        getDepartures(false).then((live) => setDeps(live))
-      }
+      getDepartures(false)
+        .then((live) => setDeps(live))
+        .catch(() => {
+          const userIsDemo = u.email === "koordinator@damri.co.id" || u.email === "sopir@damri.co.id"
+          if (userIsDemo) setDeps(SEED)
+        })
     }
   }, [])
 
@@ -103,12 +91,13 @@ export default function App() {
   const isDemo = isDemoCoordinator || isDemoDriver
 
   useEffect(() => {
-    if (role === "sopir" && isDemoDriver) {
+    // Jalankan timer simulasi demo HANYA saat offline
+    if (offline && role === "sopir" && isDemoDriver) {
       const seeded = SEED.find((d) => d.driver === ME && d.status === "dikirim")
       const t = seeded && setTimeout(() => approveMine(seeded.id), 15000)
       return () => t && clearTimeout(t)
     }
-    if (role === "koordinator" && isDemoCoordinator) {
+    if (offline && role === "koordinator" && isDemoCoordinator) {
       const i = setInterval(() => {
         const src = INCOMING[incoming.current % INCOMING.length]
         incoming.current++
@@ -116,30 +105,30 @@ export default function App() {
       }, 20000)
       return () => clearInterval(i)
     }
-  }, [role, currentUser, approveMine, isDemoCoordinator, isDemoDriver])
+  }, [role, offline, approveMine, isDemoCoordinator, isDemoDriver])
 
   // Initial fetch & background sync
   useEffect(() => {
-    const userIsDemo = currentUser?.email === "koordinator@damri.co.id" || currentUser?.email === "sopir@damri.co.id"
-    if (userIsDemo) {
-      setDeps(SEED)
-    } else {
-      getDepartures(false).then((liveDeps) => {
+    if (!role) return
+    getDepartures(false)
+      .then((liveDeps) => {
         setDeps(liveDeps)
       })
-    }
-  }, [currentUser?.email])
+      .catch(() => {
+        if (isDemo) setDeps(SEED)
+      })
+  }, [role, currentUser?.email, isDemo])
 
-  // Polling data Supabase untuk akun riil agar selalu sinkron
+  // Polling data Supabase agar selalu sinkron
   useEffect(() => {
-    if (!role || isDemo) return
+    if (!role || offline) return
     const interval = setInterval(() => {
       getDepartures(false).then((live) => {
         setDeps(live)
       })
     }, 10000)
     return () => clearInterval(interval)
-  }, [role, isDemo])
+  }, [role, offline])
 
 
 

@@ -41,8 +41,8 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
     },
   ])
   useEffect(() => {
-    supabase.from("profiles").select("*").order("created_at", { ascending: false }).then(({ data }) => {
-      if (data && data.length > 0) {
+    supabase.from("profiles").select("*").order("created_at", { ascending: false }).then(({ data, error }) => {
+      if (!error && data) {
         setUsers(
           data.map((p) => ({
             n: p.nama,

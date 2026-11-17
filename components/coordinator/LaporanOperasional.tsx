@@ -23,8 +23,8 @@ export default function LaporanOperasional({ deps, toast }: Props) {
 
   useEffect(() => {
     getMasterData().then((m) => {
-      if (m.segments?.length) setSegments(m.segments)
-      if (m.jalurList?.length) setJalurList(m.jalurList)
+      setSegments(m.segments || [])
+      setJalurList(m.jalurList || [])
     })
   }, [])
   const approved = deps.filter(

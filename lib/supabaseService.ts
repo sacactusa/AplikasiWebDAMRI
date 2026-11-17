@@ -62,13 +62,19 @@ export async function getMasterData(): Promise<{
         .order("berlaku_mulai", { ascending: false }),
     ])
 
-    if (segRes.error || !segRes.data || segRes.data.length === 0) {
+    // Fallback ke data lokal HANYA jika terjadi error koneksi ke Supabase
+    if (segRes.error || jalRes.error || vehRes.error) {
+      console.warn("Gagal memuat master data dari Supabase (koneksi/skema bermasalah):", {
+        seg: segRes.error,
+        jal: jalRes.error,
+        veh: vehRes.error,
+      })
       return { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES }
     }
 
-    // Map Segmen
+    // Map Segmen (jika kosong, tetap kembalikan array kosong [])
     const segMap = new Map<string, string>() // id (uuid) -> kode
-    const segments: Segment[] = segRes.data.map((s) => {
+    const segments: Segment[] = (segRes.data || []).map((s) => {
       segMap.set(s.id, s.kode)
       return {
         id: s.kode || s.id,
@@ -109,9 +115,9 @@ export async function getMasterData(): Promise<{
     }))
 
     return {
-      segments: segments.length ? segments : SEGMENTS,
-      jalurList: jalurList.length ? jalurList : JALUR,
-      vehicles: vehicles.length ? vehicles : VEHICLES,
+      segments,
+      jalurList,
+      vehicles,
     }
   } catch (err) {
     console.warn(

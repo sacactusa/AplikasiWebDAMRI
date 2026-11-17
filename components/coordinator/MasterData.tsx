@@ -1,13 +1,13 @@
 "use client"
 
-import { useState } from "react"
-import { Lock, Plus, ChevronDown, Pencil, Eye, EyeOff, Trash2 } from "lucide-react"
-import { SEGMENTS, JALUR, VEHICLES, TODAY, rupiah, jalur, seg, fmtDate } from "@/lib/data"
+import { useState, useEffect } from "react"
+import { Lock, Plus, ChevronDown, Pencil, Eye, EyeOff, Trash2, LoaderCircle } from "lucide-react"
+import type { Segment, Jalur, Vehicle } from "@/lib/data"
+import { TODAY, rupiah, jalur, seg, fmtDate } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
 import { getMasterData, logAudit } from "@/lib/supabaseService"
 import { supabase } from "@/lib/supabase"
-import { useEffect } from "react"
 
 interface Props {
   toast: (t: string) => void
@@ -24,36 +24,41 @@ export default function MasterData({ toast, currentUser }: Props) {
     "Segmen",
   )
   const [q, setQ] = useState("")
-  const [segs, setSegs] = useState(SEGMENTS)
-  const [jals, setJals] = useState(JALUR)
-  const [vehs, setVehs] = useState(VEHICLES)
+  const [segs, setSegs] = useState<Segment[]>([])
+  const [jals, setJals] = useState<Jalur[]>([])
+  const [vehs, setVehs] = useState<Vehicle[]>([])
+  const [tarifs, setTarifs] = useState<Tarif[]>([])
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    getMasterData().then((m) => {
-      if (m.segments?.length) setSegs(m.segments)
-      if (m.jalurList?.length) setJals(m.jalurList)
-      if (m.vehicles?.length) setVehs(m.vehicles)
-    })
-    supabase.from("tarif_jalur").select("*").order("berlaku_mulai", { ascending: false }).then(({ data }) => {
-      if (data && data.length > 0) {
-        setTarifs(data.map(t => ({
-          jalurId: t.jalur_id,
-          tarif: Number(t.tarif),
-          mulai: t.berlaku_mulai
-        })))
-      }
+    setLoading(true)
+    Promise.all([
+      getMasterData().then((m) => {
+        setSegs(m.segments || [])
+        setJals(m.jalurList || [])
+        setVehs(m.vehicles || [])
+      }),
+      supabase
+        .from("tarif_jalur")
+        .select("*")
+        .order("berlaku_mulai", { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setTarifs(
+              data.map((t) => ({
+                jalurId: t.jalur_id,
+                tarif: Number(t.tarif),
+                mulai: t.berlaku_mulai,
+              })),
+            )
+          } else if (!error) {
+            setTarifs([])
+          }
+        }),
+    ]).finally(() => {
+      setLoading(false)
     })
   }, [])
-
-  const [tarifs, setTarifs] = useState<Tarif[]>([
-    ...JALUR.filter((j) => j.tarif).map((j) => ({
-      jalurId: j.id,
-      tarif: j.tarif,
-      mulai: "2026-10-01",
-    })),
-    { jalurId: "j1", tarif: 140000, mulai: "2026-01-01" },
-    { jalurId: "j2", tarif: 150000, mulai: "2026-01-01" },
-    { jalurId: "j5", tarif: 80000, mulai: "2025-07-01" },
-  ])
   const [form, setForm] = useState<null | Record<string, string>>(null)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -561,140 +566,209 @@ export default function MasterData({ toast, currentUser }: Props) {
             </tr>
           </thead>
           <tbody>
-            {tab === "Segmen" &&
-              segs.map((s, i) =>
-                has(s.nama) ? (
-                  <tr key={s.id} className="border-b border-line last:border-0">
-                    <td className={cx(td, "font-medium")}>{s.nama}</td>
-                    <td className={cx(td, "w-32")}>{s.kontrak ? "Kontrak" : "Reguler"}</td>
-                    <td className={cx(td, "w-48 whitespace-nowrap num")}>
-                      {s.kontrak ? (
-                        <span className="inline-flex items-center gap-1.5 font-medium text-ink">
-                          <Lock size={12} className="shrink-0 text-slate-400" />
-                          <span>{rupiah(s.nilaiTetap)}</span>
-                        </span>
-                      ) : (
-                        <span className="text-mute font-sans">–</span>
-                      )}
-                    </td>
-                    <td className={cx(td, "w-28")}>{aktifBadge(s.aktif)}</td>
-                    <Aksi
-                      rowKey={`seg_${s.id}`}
-                      aktif={s.aktif}
-                      isNearBottom={i >= segs.length - 2}
-                      labelDelete="Hapus Segmen"
-                      onEdit={() => (
-                        setTab("Segmen"),
-                        setForm({
-                          id: s.id,
-                          nama: s.nama,
-                          kontrak: s.kontrak ? "ya" : "tidak",
-                          nilai: String(s.nilaiTetap ?? ""),
-                        })
-                      )}
-                      onToggle={() => toggle(segs, setSegs, i)}
-                      onDelete={() => setDeleteTarget({ type: "Segmen", id: s.id, name: s.nama })}
-                    />
-                  </tr>
-                ) : null,
-              )}
-            {tab === "Jalur" &&
-              jals.map((j, i) =>
-                has(j.nama) ? (
-                  <tr key={j.id} className="border-b border-line last:border-0">
-                    <td className={cx(td, "font-medium")}>{j.nama}</td>
-                    <td className={cx(td, "w-48")}>{seg(j.segmentId).nama}</td>
-                    <td className={cx(td, "w-40 whitespace-nowrap num")}>
-                      {j.tarif ? rupiah(j.tarif) : <span className="text-mute font-sans">Nilai tetap</span>}
-                    </td>
-                    <td className={cx(td, "w-28")}>{aktifBadge(j.aktif)}</td>
-                    <Aksi
-                      rowKey={`jal_${j.id}`}
-                      aktif={j.aktif}
-                      isNearBottom={i >= jals.length - 2}
-                      labelDelete="Hapus Jalur"
-                      onEdit={() =>
-                        setForm({
-                          id: j.id,
-                          nama: j.nama,
-                          segmentId: j.segmentId,
-                        })
-                      }
-                      onToggle={() => toggle(jals, setJals, i)}
-                      onDelete={() => setDeleteTarget({ type: "Jalur", id: j.id, name: j.nama })}
-                    />
-                  </tr>
-                ) : null,
-              )}
-            {tab === "Tarif" &&
-              [...tarifs]
-                .sort(
-                  (a, b) =>
-                    a.jalurId.localeCompare(b.jalurId) ||
-                    b.mulai.localeCompare(a.mulai),
-                )
-                .filter((x) => has(jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama))
-                .map((x, i, arr) => {
-                  const jalurNama = jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama
-                  return (
-                    <tr key={i} className="border-b border-line last:border-0">
-                      <td className={cx(td, "font-medium")}>{jalurNama}</td>
-                      <td className={cx(td, "w-40 whitespace-nowrap num")}>{rupiah(x.tarif)}</td>
-                      <td className={cx(td, "w-40 whitespace-nowrap num")}>{fmtDate(x.mulai)}</td>
-                      <td className={cx(td, "w-28")}>
-                        {arr.find((y) => y.jalurId === x.jalurId)?.mulai ===
-                        x.mulai ? (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                            Berlaku
-                          </span>
+            {loading ? (
+              <tr>
+                <td colSpan={tab === "Kendaraan" ? 4 : 5} className="py-14 text-center">
+                  <div className="inline-flex items-center gap-2 text-sm text-mute">
+                    <LoaderCircle size={18} className="animate-spin text-navy" />
+                    <span>Memuat data {tab.toLowerCase()}...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              <>
+                {tab === "Segmen" &&
+                  (segs.filter((s) => has(s.nama)).length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-sm text-mute">
+                        {q ? (
+                          <span>Tidak ada segmen yang sesuai dengan &ldquo;{q}&rdquo;.</span>
                         ) : (
-                          <span className="text-xs text-mute">Riwayat</span>
+                          <span>Belum ada data segmen di database. Klik tombol <strong>Tambah</strong> di atas untuk membuat segmen baru.</span>
                         )}
                       </td>
-                      <Aksi
-                        rowKey={`tar_${x.jalurId}_${x.mulai}_${i}`}
-                        isNearBottom={i >= arr.length - 2}
-                        labelDelete="Hapus Tarif"
-                        onEdit={() =>
-                          setForm({
-                            jalurId: x.jalurId,
-                            tarif: String(x.tarif),
-                            mulai: x.mulai,
-                          })
-                        }
-                        onDelete={() =>
-                          setDeleteTarget({
-                            type: "Tarif",
-                            id: x.jalurId,
-                            name: `${jalurNama} - ${rupiah(x.tarif)} (${fmtDate(x.mulai)})`,
-                            extra: { mulai: x.mulai, index: i },
-                          })
-                        }
-                      />
                     </tr>
-                  )
-                })}
-            {tab === "Kendaraan" &&
-              vehs.map((v, i) =>
-                has(v.cb + v.plat) ? (
-                  <tr key={v.cb} className="border-b border-line last:border-0">
-                    <td className={cx(td, "num font-medium")}>{v.cb}</td>
-                    <td className={cx(td, "w-56 num")}>{v.plat}</td>
-                    <td className={cx(td, "w-28")}>{aktifBadge(v.aktif)}</td>
-                    <Aksi
-                      rowKey={`veh_${v.cb}`}
-                      aktif={v.aktif}
-                      isNearBottom={i >= vehs.length - 2}
-                      labelDelete="Hapus Kendaraan"
-                      onEdit={() =>
-                        setForm({ id: v.cb, cb: v.cb, plat: v.plat })
-                      }
-                      onToggle={() => toggle(vehs, setVehs, i)}
-                      onDelete={() => setDeleteTarget({ type: "Kendaraan", id: v.cb, name: `${v.cb} (${v.plat})` })}
-                    />
-                  </tr>
-                ) : null,
-              )}
+                  ) : (
+                    segs
+                      .filter((s) => has(s.nama))
+                      .map((s, i, arr) => (
+                        <tr key={s.id} className="border-b border-line last:border-0">
+                          <td className={cx(td, "font-medium")}>{s.nama}</td>
+                          <td className={cx(td, "w-32")}>{s.kontrak ? "Kontrak" : "Reguler"}</td>
+                          <td className={cx(td, "w-48 whitespace-nowrap num")}>
+                            {s.kontrak ? (
+                              <span className="inline-flex items-center gap-1.5 font-medium text-ink">
+                                <Lock size={12} className="shrink-0 text-slate-400" />
+                                <span>{rupiah(s.nilaiTetap)}</span>
+                              </span>
+                            ) : (
+                              <span className="text-mute font-sans">–</span>
+                            )}
+                          </td>
+                          <td className={cx(td, "w-28")}>{aktifBadge(s.aktif)}</td>
+                          <Aksi
+                            rowKey={`seg_${s.id}`}
+                            aktif={s.aktif}
+                            isNearBottom={i >= arr.length - 2}
+                            labelDelete="Hapus Segmen"
+                            onEdit={() => (
+                              setTab("Segmen"),
+                              setForm({
+                                id: s.id,
+                                nama: s.nama,
+                                kontrak: s.kontrak ? "ya" : "tidak",
+                                nilai: String(s.nilaiTetap ?? ""),
+                              })
+                            )}
+                            onToggle={() => toggle(segs, setSegs, i)}
+                            onDelete={() => setDeleteTarget({ type: "Segmen", id: s.id, name: s.nama })}
+                          />
+                        </tr>
+                      ))
+                  ))}
+
+                {tab === "Jalur" &&
+                  (jals.filter((j) => has(j.nama)).length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-sm text-mute">
+                        {q ? (
+                          <span>Tidak ada jalur yang sesuai dengan &ldquo;{q}&rdquo;.</span>
+                        ) : (
+                          <span>Belum ada data jalur di database. Klik tombol <strong>Tambah</strong> di atas untuk membuat jalur baru.</span>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    jals
+                      .filter((j) => has(j.nama))
+                      .map((j, i, arr) => (
+                        <tr key={j.id} className="border-b border-line last:border-0">
+                          <td className={cx(td, "font-medium")}>{j.nama}</td>
+                          <td className={cx(td, "w-48")}>{segs.find((s) => s.id === j.segmentId)?.nama || seg(j.segmentId).nama}</td>
+                          <td className={cx(td, "w-40 whitespace-nowrap num")}>
+                            {j.tarif ? rupiah(j.tarif) : <span className="text-mute font-sans">Nilai tetap</span>}
+                          </td>
+                          <td className={cx(td, "w-28")}>{aktifBadge(j.aktif)}</td>
+                          <Aksi
+                            rowKey={`jal_${j.id}`}
+                            aktif={j.aktif}
+                            isNearBottom={i >= arr.length - 2}
+                            labelDelete="Hapus Jalur"
+                            onEdit={() =>
+                              setForm({
+                                id: j.id,
+                                nama: j.nama,
+                                segmentId: j.segmentId,
+                              })
+                            }
+                            onToggle={() => toggle(jals, setJals, i)}
+                            onDelete={() => setDeleteTarget({ type: "Jalur", id: j.id, name: j.nama })}
+                          />
+                        </tr>
+                      ))
+                  ))}
+
+                {tab === "Tarif" &&
+                  (() => {
+                    const sortedTarifs = [...tarifs]
+                      .sort(
+                        (a, b) =>
+                          a.jalurId.localeCompare(b.jalurId) ||
+                          b.mulai.localeCompare(a.mulai),
+                      )
+                      .filter((x) => has(jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama))
+
+                    if (sortedTarifs.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-sm text-mute">
+                            {q ? (
+                              <span>Tidak ada tarif yang sesuai dengan &ldquo;{q}&rdquo;.</span>
+                            ) : (
+                              <span>Belum ada data tarif di database. Klik tombol <strong>Tambah</strong> di atas untuk membuat tarif baru.</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    }
+
+                    return sortedTarifs.map((x, i, arr) => {
+                      const jalurNama = jals.find((j) => j.id === x.jalurId)?.nama || jalur(x.jalurId).nama
+                      return (
+                        <tr key={i} className="border-b border-line last:border-0">
+                          <td className={cx(td, "font-medium")}>{jalurNama}</td>
+                          <td className={cx(td, "w-40 whitespace-nowrap num")}>{rupiah(x.tarif)}</td>
+                          <td className={cx(td, "w-40 whitespace-nowrap num")}>{fmtDate(x.mulai)}</td>
+                          <td className={cx(td, "w-28")}>
+                            {arr.find((y) => y.jalurId === x.jalurId)?.mulai ===
+                            x.mulai ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                                Berlaku
+                              </span>
+                            ) : (
+                              <span className="text-xs text-mute">Riwayat</span>
+                            )}
+                          </td>
+                          <Aksi
+                            rowKey={`tar_${x.jalurId}_${x.mulai}_${i}`}
+                            isNearBottom={i >= arr.length - 2}
+                            labelDelete="Hapus Tarif"
+                            onEdit={() =>
+                              setForm({
+                                jalurId: x.jalurId,
+                                tarif: String(x.tarif),
+                                mulai: x.mulai,
+                              })
+                            }
+                            onDelete={() =>
+                              setDeleteTarget({
+                                type: "Tarif",
+                                id: x.jalurId,
+                                name: `${jalurNama} - ${rupiah(x.tarif)} (${fmtDate(x.mulai)})`,
+                                extra: { mulai: x.mulai, index: i },
+                              })
+                            }
+                          />
+                        </tr>
+                      )
+                    })
+                  })()}
+
+                {tab === "Kendaraan" &&
+                  (vehs.filter((v) => has(v.cb + v.plat)).length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-12 text-center text-sm text-mute">
+                        {q ? (
+                          <span>Tidak ada kendaraan yang sesuai dengan &ldquo;{q}&rdquo;.</span>
+                        ) : (
+                          <span>Belum ada data kendaraan di database. Klik tombol <strong>Tambah</strong> di atas untuk membuat kendaraan baru.</span>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    vehs
+                      .filter((v) => has(v.cb + v.plat))
+                      .map((v, i, arr) => (
+                        <tr key={v.cb} className="border-b border-line last:border-0">
+                          <td className={cx(td, "num font-medium")}>{v.cb}</td>
+                          <td className={cx(td, "w-56 num")}>{v.plat}</td>
+                          <td className={cx(td, "w-28")}>{aktifBadge(v.aktif)}</td>
+                          <Aksi
+                            rowKey={`veh_${v.cb}`}
+                            aktif={v.aktif}
+                            isNearBottom={i >= arr.length - 2}
+                            labelDelete="Hapus Kendaraan"
+                            onEdit={() =>
+                              setForm({ id: v.cb, cb: v.cb, plat: v.plat })
+                            }
+                            onToggle={() => toggle(vehs, setVehs, i)}
+                            onDelete={() => setDeleteTarget({ type: "Kendaraan", id: v.cb, name: `${v.cb} (${v.plat})` })}
+                          />
+                        </tr>
+                      ))
+                  ))}
+              </>
+            )}
           </tbody>
         </table>
       </div>
