@@ -340,7 +340,12 @@ export default function Coordinator({
                 setProfile(updated)
                 if (typeof window !== "undefined") {
                   try {
-                    const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"; localStorage.setItem(key, JSON.stringify(updated)); if (currentUser?.id) { supabase.from("profiles").update({ nama: updated.nama, telepon: updated.telepon }).eq("id", currentUser.id).then(() => {}); }
+                    const isDemoCoord = currentUser?.email === "koordinator@damri.co.id"
+                    const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"
+                    localStorage.setItem(key, JSON.stringify(updated))
+                    if (!isDemoCoord && currentUser?.id) {
+                      supabase.from("profiles").update({ nama: updated.nama, telepon: updated.telepon }).eq("id", currentUser.id).then(() => {})
+                    }
                   } catch {}
                 }
                 setProfileDialog(false)

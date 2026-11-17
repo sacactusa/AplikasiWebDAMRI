@@ -98,6 +98,8 @@ export default function MasterData({ toast, currentUser }: Props) {
     set_(arr.map((x, k) => (k === i ? { ...x, aktif: nextAktif } : x)))
     toast(item.aktif ? "Dinonaktifkan" : "Diaktifkan kembali")
 
+    if (isDemo) return
+
     try {
       if (tab === "Segmen") {
         const segItem = item as unknown as { id: string; nama: string }
@@ -141,6 +143,16 @@ export default function MasterData({ toast, currentUser }: Props) {
   const confirmDelete = async () => {
     if (!deleteTarget) return
     const target = deleteTarget
+
+    if (isDemo) {
+      if (target.type === "Segmen") setSegs((p) => p.filter((s) => s.id !== target.id))
+      else if (target.type === "Jalur") setJals((p) => p.filter((j) => j.id !== target.id))
+      else if (target.type === "Kendaraan") setVehs((p) => p.filter((v) => v.cb !== target.id))
+      else if (target.type === "Tarif") setTarifs((p) => p.filter((_, idx) => idx !== target.extra?.index))
+      toast(`${target.type} '${target.name}' berhasil dihapus`)
+      setDeleteTarget(null)
+      return
+    }
 
     try {
       if (target.type === "Segmen") {
@@ -269,6 +281,9 @@ export default function MasterData({ toast, currentUser }: Props) {
       const nilaiTetap = kontrak ? Number(f("nilai").replace(/\D/g, "")) : undefined
       const item = { id: kode, nama, kontrak, nilaiTetap, aktif: true }
       setSegs((p) => f("id") ? p.map((x) => x.id === item.id ? { ...x, ...item, aktif: x.aktif } : x) : [...p, item])
+      setForm(null)
+      toast("Segmen berhasil disimpan")
+      if (isDemo) return
       
       try {
         await supabase.from("segmen").upsert({
@@ -293,6 +308,17 @@ export default function MasterData({ toast, currentUser }: Props) {
     if (tab === "Jalur") {
       const nama = f("nama").trim()
       const segmentKode = f("segmentId") || "bandara"
+      if (isDemo) {
+        if (f("id")) {
+          setJals((p) => p.map((x) => x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x))
+        } else {
+          setJals((p) => [...p, { id: "j_" + Date.now(), nama, segmentId: segmentKode, tarif: 0, aktif: true }])
+        }
+        setForm(null)
+        toast("Jalur berhasil disimpan")
+        return
+      }
+
       try {
         const { data: segRow } = await supabase.from("segmen").select("id").eq("kode", segmentKode).limit(1)
         const segId = segRow?.[0]?.id
@@ -321,11 +347,21 @@ export default function MasterData({ toast, currentUser }: Props) {
       const plat = f("plat").trim()
       if (f("id")) {
         setVehs((p) => p.map((x) => x.cb === f("id") ? { ...x, cb, plat } : x))
-        supabase.from("kendaraan").update({ kode_cb: cb, plat }).eq("kode_cb", f("id")).then(() => {})
+        if (!isDemo) {
+          supabase.from("kendaraan").update({ kode_cb: cb, plat }).eq("kode_cb", f("id")).then(() => {})
+        }
       } else {
         setVehs((p) => [...p, { cb, plat, aktif: true }])
-        supabase.from("kendaraan").insert({ kode_cb: cb, plat, aktif: true }).then(() => {})
+        if (!isDemo) {
+          supabase.from("kendaraan").insert({ kode_cb: cb, plat, aktif: true }).then(() => {})
+        }
       }
+      if (isDemo) {
+        setForm(null)
+        toast("Kendaraan berhasil disimpan")
+        return
+      }
+
       logAudit({
         user_nama: userNama,
         aksi: f("id") ? "Ubah" : "Tambah",
@@ -340,6 +376,9 @@ export default function MasterData({ toast, currentUser }: Props) {
       const tarif = Number(f("tarif").replace(/\D/g, ""))
       const mulai = f("mulai") || TODAY
       setTarifs((p) => [...p, { jalurId, tarif, mulai }])
+      setForm(null)
+      toast("Tarif berhasil disimpan")
+      if (isDemo) return
       
       try {
         const { data: jRow } = await supabase.from("jalur").select("id").or(`id.eq.${jalurId},nama.eq.${jalurId}`).limit(1)

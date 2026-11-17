@@ -232,6 +232,7 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                               } else {
                                 setUsers((p) => p.map((x, k) => (k === i ? { ...x, a: true } : x)))
                                 toast(`Akun ${u.n} berhasil diaktifkan kembali`)
+                                if (isDemo) return
                                 try {
                                   await supabase.from("profiles").update({ aktif: true }).eq("email", u.e)
                                   await logAudit({
@@ -312,6 +313,11 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
               disabled={!nu.n || !nu.e}
               onClick={async () => {
                 setUsers((p) => [...p, { ...nu, a: true }])
+                setNu({ n: "", e: "", p: "Sopir" })
+                setAdd(false)
+                toast("Akun ditambahkan")
+                if (isDemo) return
+
                 const targetRole = nu.p.includes("Koordinator") ? "koordinator" : "sopir"
                 await supabase.auth.signUp({
                   email: nu.e.trim().toLowerCase(),
@@ -332,9 +338,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                   sebelum: {},
                   sesudah: { email: nu.e, peran: nu.p, aktif: true }
                 })
-                setNu({ n: "", e: "", p: "Sopir" })
-                setAdd(false)
-                toast("Akun ditambahkan")
               }}
             >
               Simpan
@@ -393,6 +396,11 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                     x.e === target.e ? { ...x, p: newRoleText } : x,
                   ),
                 )
+                if (isDemo) {
+                  toast(`Peran ${target.n} berhasil diubah menjadi ${newRoleText}`)
+                  setRoleTarget(null)
+                  return
+                }
 
                 try {
                   await supabase
@@ -479,7 +487,7 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                 const targetEmail = reset
                 setReset(null)
                 toast("Tautan reset dikirim ke " + targetEmail)
-                if (targetEmail) {
+                if (!isDemo && targetEmail) {
                   try {
                     await supabase.auth.resetPasswordForEmail(targetEmail).catch(() => {})
                   } catch {}
@@ -514,6 +522,9 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                     ),
                   )
                   toast(`Akun ${target.n} dinonaktifkan`)
+                  setDeactivateTarget(null)
+                  if (isDemo) return
+
                   try {
                     await supabase.from("profiles").update({ aktif: false }).eq("email", target.e)
                     await logAudit({
@@ -527,7 +538,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                   } catch (err) {
                     console.warn("Gagal nonaktifkan akun di Supabase:", err)
                   }
-                  setDeactivateTarget(null)
                 }
               }}
             >
@@ -558,6 +568,13 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
               onClick={async () => {
                 if (deleteTarget) {
                   const target = deleteTarget
+                  if (isDemo) {
+                    setUsers((p) => p.filter((x) => x.e !== target.e))
+                    toast(`Akun ${target.n} berhasil dihapus`)
+                    setDeleteTarget(null)
+                    return
+                  }
+
                   try {
                     const { error } = await supabase
                       .from("profiles")

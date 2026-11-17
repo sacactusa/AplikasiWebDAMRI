@@ -93,7 +93,9 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
         ids.includes(d.id) ? { ...d, status: "disetujui", isNew: false } : d,
       ),
     )
-    ids.forEach((id) => approveDeparture(id, "Koordinator"))
+    if (!isDemo) {
+      ids.forEach((id) => approveDeparture(id, "Koordinator"))
+    }
     setSel((s) => s.filter((x) => !ids.includes(x)))
     setOpen(null)
     toast(
@@ -110,7 +112,9 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           : d,
       ),
     )
-    if (rej) rejectDeparture(rej, note.trim(), "Koordinator")
+    if (!isDemo && rej) {
+      rejectDeparture(rej, note.trim(), "Koordinator")
+    }
     setRej(null)
     setOpen(null)
     setNote("")

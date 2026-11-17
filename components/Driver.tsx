@@ -135,7 +135,11 @@ export default function Driver({
               setProfile(p)
               if (typeof window !== "undefined") {
                 try {
-                  const key = currentUser?.email ? "damri_driver_profile_" + currentUser.email : "damri_driver_profile"; localStorage.setItem(key, JSON.stringify(p)); if (currentUser?.id) { supabase.from("profiles").update({ nama: p.nama, telepon: p.telepon }).eq("id", currentUser.id).then(() => {}); }
+                  const key = currentUser?.email ? "damri_driver_profile_" + currentUser.email : "damri_driver_profile"
+                  localStorage.setItem(key, JSON.stringify(p))
+                  if (!isDemoDriver && currentUser?.id) {
+                    supabase.from("profiles").update({ nama: p.nama, telepon: p.telepon }).eq("id", currentUser.id).then(() => {})
+                  }
                 } catch {}
               }
             }}
@@ -158,10 +162,12 @@ export default function Driver({
               setDeps((p) => [d, ...p])
               setView({ n: "detail", id: d.id })
               toast("Berhasil disimpan")
-              const res = await createDeparture(d, currentUser?.email)
-              if (res.id && res.id !== d.id) {
-                setDeps((p) => p.map((x) => (x.id === d.id ? { ...x, id: res.id! } : x)))
-                setView((v) => (v.n === "detail" && v.id === d.id ? { n: "detail", id: res.id! } : v))
+              if (!isDemoDriver) {
+                const res = await createDeparture(d, currentUser?.email)
+                if (res.id && res.id !== d.id) {
+                  setDeps((p) => p.map((x) => (x.id === d.id ? { ...x, id: res.id! } : x)))
+                  setView((v) => (v.n === "detail" && v.id === d.id ? { n: "detail", id: res.id! } : v))
+                }
               }
             }}
           />
@@ -189,13 +195,17 @@ export default function Driver({
               onBack={() => setView({ n: lastTabRef.current })}
               onSave={(d) => {
                 setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
-                updateDeparture(d, profile.nama)
+                if (!isDemoDriver) {
+                  updateDeparture(d, profile.nama)
+                }
                 setView({ n: lastTabRef.current })
                 toast("Berhasil disimpan")
               }}
               onSubmit={(d) => {
                 setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
-                updateDeparture(d, profile.nama)
+                if (!isDemoDriver) {
+                  updateDeparture(d, profile.nama)
+                }
                 submitted(d)
                 setView({ n: "success" })
                 setTimeout(
