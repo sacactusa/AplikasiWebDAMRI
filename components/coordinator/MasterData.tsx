@@ -19,6 +19,17 @@ interface Tarif {
   mulai: string
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const getTodayReal = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export default function MasterData({ toast, currentUser }: Props) {
   const isDemo = currentUser?.email === "koordinator@damri.co.id"
   const [tab, setTab] = useState<"Segmen" | "Jalur" | "Tarif" | "Kendaraan">(
@@ -103,7 +114,10 @@ export default function MasterData({ toast, currentUser }: Props) {
     try {
       if (tab === "Segmen") {
         const segItem = item as unknown as { id: string; nama: string }
-        await supabase.from("segmen").update({ aktif: nextAktif }).or(`kode.eq.${segItem.id},id.eq.${segItem.id}`)
+        const q = UUID_REGEX.test(segItem.id)
+          ? supabase.from("segmen").update({ aktif: nextAktif }).eq("id", segItem.id)
+          : supabase.from("segmen").update({ aktif: nextAktif }).eq("kode", segItem.id)
+        await q
         await logAudit({
           user_nama: userNama,
           aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
@@ -156,10 +170,10 @@ export default function MasterData({ toast, currentUser }: Props) {
 
     try {
       if (target.type === "Segmen") {
-        const { error } = await supabase
-          .from("segmen")
-          .delete()
-          .or(`kode.eq.${target.id},id.eq.${target.id}`)
+        const q = UUID_REGEX.test(target.id)
+          ? supabase.from("segmen").delete().eq("id", target.id)
+          : supabase.from("segmen").delete().eq("kode", target.id)
+        const { error } = await q
 
         if (error) {
           if (error.code === "23503") {
@@ -276,7 +290,7 @@ export default function MasterData({ toast, currentUser }: Props) {
   const save = async () => {
     if (tab === "Segmen") {
       const nama = f("nama").trim()
-      const kode = f("id") || nama.toLowerCase().replace(/\s+/g, "-")
+      const kode = (f("kode") || f("id") || nama.toLowerCase().replace(/\s+/g, "-")).trim()
       const kontrak = f("kontrak") === "ya"
       const nilaiTetap = kontrak ? Number(f("nilai").replace(/\D/g, "")) : undefined
       const item = { id: kode, nama, kontrak, nilaiTetap, aktif: true }
@@ -286,13 +300,21 @@ export default function MasterData({ toast, currentUser }: Props) {
       if (isDemo) return
       
       try {
-        await supabase.from("segmen").upsert({
-          kode,
-          nama,
-          kontrak,
-          nilai_tetap: nilaiTetap || null,
-          aktif: true
-        }, { onConflict: "kode" })
+        if (f("id") && UUID_REGEX.test(f("id"))) {
+          await supabase.from("segmen").update({
+            nama,
+            kontrak,
+            nilai_tetap: nilaiTetap || null,
+          }).eq("id", f("id"))
+        } else {
+          await supabase.from("segmen").upsert({
+            kode,
+            nama,
+            kontrak,
+            nilai_tetap: nilaiTetap || null,
+            aktif: true
+          }, { onConflict: "kode" })
+        }
         await logAudit({
           user_nama: userNama,
           aksi: f("id") ? "Ubah" : "Tambah",
@@ -304,15 +326,37 @@ export default function MasterData({ toast, currentUser }: Props) {
       } catch (err) {
         console.warn("Gagal simpan segmen ke Supabase:", err)
       }
+      return
     }
+
     if (tab === "Jalur") {
       const nama = f("nama").trim()
-      const segmentKode = f("segmentId") || "bandara"
+      const segmentKode = f("segmentId") || segs[0]?.id || ""
+      const tarifAwal = Number(f("tarif")?.replace(/\D/g, "") || 0)
+
+      if (!nama) {
+        toast("Nama jalur tidak boleh kosong")
+        return
+      }
+
       if (isDemo) {
         if (f("id")) {
-          setJals((p) => p.map((x) => x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x))
+          setJals((p) =>
+            p.map((x) =>
+              x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x,
+            ),
+          )
         } else {
-          setJals((p) => [...p, { id: "j_" + Date.now(), nama, segmentId: segmentKode, tarif: 0, aktif: true }])
+          setJals((p) => [
+            ...p,
+            {
+              id: "j_" + Date.now(),
+              nama,
+              segmentId: segmentKode,
+              tarif: tarifAwal,
+              aktif: true,
+            },
+          ])
         }
         setForm(null)
         toast("Jalur berhasil disimpan")
@@ -320,28 +364,115 @@ export default function MasterData({ toast, currentUser }: Props) {
       }
 
       try {
-        const { data: segRow } = await supabase.from("segmen").select("id").eq("kode", segmentKode).limit(1)
-        const segId = segRow?.[0]?.id
-        if (f("id")) {
-          setJals((p) => p.map((x) => x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x))
-          await supabase.from("jalur").update({ nama, segmen_id: segId }).eq("id", f("id"))
-        } else {
-          const { data: ins } = await supabase.from("jalur").insert({ nama, segmen_id: segId, aktif: true }).select()
-          const newId = ins?.[0]?.id || "j_" + Date.now()
-          setJals((p) => [...p, { id: newId, nama, segmentId: segmentKode, tarif: 0, aktif: true }])
+        let segId: string | undefined
+        const segObj = segs.find((s) => s.id === segmentKode)
+        if (segObj?.rawId && UUID_REGEX.test(segObj.rawId)) {
+          segId = segObj.rawId
+        } else if (UUID_REGEX.test(segmentKode)) {
+          segId = segmentKode
+        } else if (segmentKode) {
+          const { data: segRow } = await supabase
+            .from("segmen")
+            .select("id")
+            .eq("kode", segmentKode)
+            .limit(1)
+          segId = segRow?.[0]?.id
         }
+
+        if (!segId) {
+          const { data: firstSeg } = await supabase
+            .from("segmen")
+            .select("id")
+            .limit(1)
+          segId = firstSeg?.[0]?.id
+        }
+
+        if (!segId) {
+          toast("Gagal: Belum ada Segmen di database. Silakan buat Segmen terlebih dahulu.")
+          return
+        }
+
+        if (f("id")) {
+          const { error: updErr } = await supabase
+            .from("jalur")
+            .update({ nama, segmen_id: segId })
+            .eq("id", f("id"))
+
+          if (updErr) {
+            console.error("Gagal update jalur di Supabase:", updErr)
+            toast(`Gagal mengubah jalur: ${updErr.message}`)
+            return
+          }
+
+          setJals((p) =>
+            p.map((x) =>
+              x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x,
+            ),
+          )
+        } else {
+          const { data: ins, error: insErr } = await supabase
+            .from("jalur")
+            .insert({ nama, segmen_id: segId, aktif: true })
+            .select()
+
+          if (insErr || !ins?.[0]) {
+            console.error("Gagal tambah jalur ke Supabase:", insErr)
+            toast(`Gagal menyimpan jalur: ${insErr?.message || "Terjadi kesalahan"}`)
+            return
+          }
+
+          const newJalurId = ins[0].id
+
+          if (tarifAwal > 0) {
+            const todayStr = getTodayReal()
+            const { error: tarErr } = await supabase.from("tarif_jalur").insert({
+              jalur_id: newJalurId,
+              tarif: tarifAwal,
+              berlaku_mulai: todayStr,
+            })
+            if (!tarErr) {
+              setTarifs((p) => [
+                {
+                  jalurId: newJalurId,
+                  tarif: tarifAwal,
+                  mulai: todayStr,
+                },
+                ...p,
+              ])
+            }
+          }
+
+          setJals((p) => [
+            ...p,
+            {
+              id: newJalurId,
+              nama,
+              segmentId: segmentKode,
+              tarif: tarifAwal,
+              aktif: true,
+            },
+          ])
+        }
+
         await logAudit({
           user_nama: userNama,
           aksi: f("id") ? "Ubah" : "Tambah",
           tabel: "jalur",
           objek: `jalur · ${nama}`,
           sebelum: {},
-          sesudah: { nama, segmentKode }
+          sesudah: { nama, segmentKode, tarif: tarifAwal },
         })
-      } catch (err) {
-        console.warn("Gagal simpan jalur ke Supabase:", err)
+
+        setForm(null)
+        toast("Jalur berhasil disimpan ke database")
+        return
+      } catch (err: any) {
+        console.error("Gagal simpan jalur ke Supabase:", err)
+        toast(`Gagal menyimpan jalur: ${err?.message || "Terjadi kesalahan"}`)
+        return
       }
     }
+
     if (tab === "Kendaraan") {
       const cb = f("cb").trim()
       const plat = f("plat").trim()
@@ -356,11 +487,9 @@ export default function MasterData({ toast, currentUser }: Props) {
           supabase.from("kendaraan").insert({ kode_cb: cb, plat, aktif: true }).then(() => {})
         }
       }
-      if (isDemo) {
-        setForm(null)
-        toast("Kendaraan berhasil disimpan")
-        return
-      }
+      setForm(null)
+      toast("Kendaraan berhasil disimpan")
+      if (isDemo) return
 
       logAudit({
         user_nama: userNama,
@@ -370,36 +499,66 @@ export default function MasterData({ toast, currentUser }: Props) {
         sebelum: {},
         sesudah: { cb, plat }
       })
+      return
     }
+
     if (tab === "Tarif") {
-      const jalurId = f("jalurId") || "j1"
+      const jalurId = f("jalurId") || jals[0]?.id || ""
       const tarif = Number(f("tarif").replace(/\D/g, ""))
-      const mulai = f("mulai") || TODAY
-      setTarifs((p) => [...p, { jalurId, tarif, mulai }])
+      const mulai = f("mulai") || getTodayReal()
+
+      if (!jalurId) {
+        toast("Silakan pilih jalur terlebih dahulu")
+        return
+      }
+      if (!tarif || isNaN(tarif)) {
+        toast("Silakan isi nominal tarif")
+        return
+      }
+
+      setTarifs((p) => [{ jalurId, tarif, mulai }, ...p])
+      setJals((p) => p.map((j) => (j.id === jalurId ? { ...j, tarif } : j)))
       setForm(null)
       toast("Tarif berhasil disimpan")
       if (isDemo) return
-      
+
       try {
-        const { data: jRow } = await supabase.from("jalur").select("id").or(`id.eq.${jalurId},nama.eq.${jalurId}`).limit(1)
-        const resolvedJalurId = jRow?.[0]?.id || jalurId
-        await supabase.from("tarif_jalur").insert({
+        let resolvedJalurId = jalurId
+        if (!UUID_REGEX.test(jalurId)) {
+          const { data: jRow } = await supabase
+            .from("jalur")
+            .select("id")
+            .eq("nama", jalurId)
+            .limit(1)
+          if (jRow?.[0]?.id) resolvedJalurId = jRow[0].id
+        }
+
+        const { error: tarErr } = await supabase.from("tarif_jalur").insert({
           jalur_id: resolvedJalurId,
           tarif,
-          berlaku_mulai: mulai
+          berlaku_mulai: mulai,
         })
+
+        if (tarErr) {
+          console.error("Gagal simpan tarif ke Supabase:", tarErr)
+          toast(`Gagal simpan tarif: ${tarErr.message}`)
+          return
+        }
+
         await logAudit({
           user_nama: userNama,
           aksi: "Tambah",
           tabel: "tarif_jalur",
-          objek: `tarif · ${jalurId}`,
+          objek: `tarif · ${resolvedJalurId}`,
           sebelum: {},
-          sesudah: { tarif, berlaku_mulai: mulai }
+          sesudah: { tarif, berlaku_mulai: mulai },
         })
-      } catch (err) {
-        console.warn("Gagal simpan tarif ke Supabase:", err)
+      } catch (err: any) {
+        console.error("Gagal simpan tarif ke Supabase:", err)
       }
+      return
     }
+
     setForm(null)
     toast("Tersimpan")
   }
@@ -407,7 +566,7 @@ export default function MasterData({ toast, currentUser }: Props) {
     tab === "Segmen"
       ? !!f("nama")
       : tab === "Jalur"
-        ? !!f("nama")
+        ? !!f("nama") && segs.length > 0
         : tab === "Kendaraan"
           ? !!f("cb") && !!f("plat")
           : !!f("tarif")
@@ -537,7 +696,17 @@ export default function MasterData({ toast, currentUser }: Props) {
       <Title
         sub="Kelola data master operasional. Gunakan tombol Aksi untuk mengubah, menonaktifkan, atau menghapus data."
         right={
-          <Btn onClick={() => setForm({})}>
+          <Btn
+            onClick={() => {
+              if (tab === "Jalur") {
+                setForm({ segmentId: segs[0]?.id || "" })
+              } else if (tab === "Tarif") {
+                setForm({ jalurId: jals[0]?.id || "", mulai: getTodayReal() })
+              } else {
+                setForm({})
+              }
+            }}
+          >
             <Plus size={16} /> Tambah
           </Btn>
         }
@@ -844,17 +1013,16 @@ export default function MasterData({ toast, currentUser }: Props) {
         }
       >
         <div className="space-y-3 text-ink">
-          {(tab === "Segmen" || tab === "Jalur") && (
-            <Field label="Nama">
-              <input
-                value={f("nama")}
-                onChange={(e) => set("nama", e.target.value)}
-                className={inputCls()}
-              />
-            </Field>
-          )}
           {tab === "Segmen" && (
             <>
+              <Field label="Nama Segmen">
+                <input
+                  value={f("nama")}
+                  onChange={(e) => set("nama", e.target.value)}
+                  placeholder="Contoh: Bus Kota, Pariwisata, AKDP"
+                  className={inputCls()}
+                />
+              </Field>
               <Field label="Jenis">
                 <select
                   value={f("kontrak") || "tidak"}
@@ -871,27 +1039,55 @@ export default function MasterData({ toast, currentUser }: Props) {
                     inputMode="numeric"
                     value={f("nilai")}
                     onChange={(e) => set("nilai", e.target.value)}
+                    placeholder="Contoh: 50.000.000"
                     className={cx(inputCls(), "num")}
                   />
                 </Field>
               )}
             </>
           )}
+
           {tab === "Jalur" && (
-            <Field label="Segmen">
-              <select
-                value={f("segmentId") || "bandara"}
-                onChange={(e) => set("segmentId", e.target.value)}
-                className={inputCls()}
-              >
-                {segs.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nama}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <>
+              <Field label="Nama Jalur">
+                <input
+                  value={f("nama")}
+                  onChange={(e) => set("nama", e.target.value)}
+                  placeholder="Contoh: Terminal Ledeng - Leuwipanjang"
+                  className={inputCls()}
+                />
+              </Field>
+              <Field label="Segmen">
+                <select
+                  value={f("segmentId") || segs[0]?.id || ""}
+                  onChange={(e) => set("segmentId", e.target.value)}
+                  className={inputCls()}
+                >
+                  {segs.length === 0 ? (
+                    <option value="">(Belum ada Segmen - buat Segmen terlebih dahulu)</option>
+                  ) : (
+                    segs.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nama}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </Field>
+              {!f("id") && (
+                <Field label="Tarif Tiket Awal (Rp, opsional)">
+                  <input
+                    inputMode="numeric"
+                    value={f("tarif")}
+                    onChange={(e) => set("tarif", e.target.value)}
+                    placeholder="Contoh: 15.000 (biarkan kosong jika kontrak / Rp 0)"
+                    className={cx(inputCls(), "num")}
+                  />
+                </Field>
+              )}
+            </>
           )}
+
           {tab === "Kendaraan" && (
             <>
               <Field label="Nomor CB">
@@ -912,21 +1108,24 @@ export default function MasterData({ toast, currentUser }: Props) {
               </Field>
             </>
           )}
+
           {tab === "Tarif" && (
             <>
               <Field label="Jalur">
                 <select
-                  value={f("jalurId") || "j1"}
+                  value={f("jalurId") || jals[0]?.id || ""}
                   onChange={(e) => set("jalurId", e.target.value)}
                   className={inputCls()}
                 >
-                  {jals
-                    .filter((j) => j.tarif > 0)
-                    .map((j) => (
+                  {jals.length === 0 ? (
+                    <option value="">(Belum ada Jalur - buat Jalur terlebih dahulu)</option>
+                  ) : (
+                    jals.map((j) => (
                       <option key={j.id} value={j.id}>
-                        {j.nama}
+                        {j.nama} {j.tarif ? `(Saat ini: ${rupiah(j.tarif)})` : `(Belum ada tarif)`}
                       </option>
-                    ))}
+                    ))
+                  )}
                 </select>
               </Field>
               <Field label="Tarif baru (Rp)">
@@ -934,13 +1133,14 @@ export default function MasterData({ toast, currentUser }: Props) {
                   inputMode="numeric"
                   value={f("tarif")}
                   onChange={(e) => set("tarif", e.target.value)}
+                  placeholder="Contoh: 15.000"
                   className={cx(inputCls(), "num")}
                 />
               </Field>
               <Field label="Berlaku mulai">
                 <input
                   type="date"
-                  value={f("mulai") || TODAY}
+                  value={f("mulai") || getTodayReal()}
                   onChange={(e) => set("mulai", e.target.value)}
                   className={inputCls()}
                 />

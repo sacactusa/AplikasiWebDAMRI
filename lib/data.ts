@@ -6,6 +6,7 @@ export interface Segment {
   kontrak: boolean
   nilaiTetap?: number
   aktif: boolean
+  rawId?: string
 }
 export interface Jalur {
   id: string

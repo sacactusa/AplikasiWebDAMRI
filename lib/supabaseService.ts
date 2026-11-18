@@ -79,9 +79,11 @@ export async function getMasterData(isDemo = false): Promise<{
     // Map Segmen (jika kosong, tetap kembalikan array kosong [])
     const segMap = new Map<string, string>() // id (uuid) -> kode
     const segments: Segment[] = (segRes.data || []).map((s) => {
-      segMap.set(s.id, s.kode)
+      segMap.set(s.id, s.kode || s.id)
+      if (s.kode) segMap.set(s.kode, s.kode)
       return {
         id: s.kode || s.id,
+        rawId: s.id,
         nama: s.nama,
         kontrak: Boolean(s.kontrak),
         nilaiTetap: s.nilai_tetap ? Number(s.nilai_tetap) : undefined,
