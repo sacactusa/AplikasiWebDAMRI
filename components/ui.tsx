@@ -170,7 +170,7 @@ export function Empty({
   action,
 }: {
   title: string
-  hint?: string
+  hint?: ReactNode
   action?: ReactNode
 }) {
   return (
@@ -179,7 +179,7 @@ export function Empty({
         <Inbox size={34} strokeWidth={1.4} />
       </div>
       <p className="mt-5 font-serif text-2xl text-ink">{title}</p>
-      {hint && <p className="mt-1 max-w-xs text-sm text-mute">{hint}</p>}
+      {hint && <div className="mt-1 max-w-xs text-sm text-mute">{hint}</div>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   )

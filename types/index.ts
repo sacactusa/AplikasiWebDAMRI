@@ -22,6 +22,13 @@ export interface Vehicle {
   aktif: boolean
 }
 
+export interface JenisPenumpang {
+  id: string
+  nama: string
+  aktif: boolean
+  rawId?: string
+}
+
 export interface Departure {
   id: string
   date: string
@@ -31,6 +38,8 @@ export interface Departure {
   jalurNama?: string
   cb: string
   driver: string
+  driverId?: string
+  driverEmail?: string
   kmTempuh: number | null
   kmEmpty: number | null
   penumpang: number | null
@@ -41,6 +50,7 @@ export interface Departure {
   status: Status
   rejectNote?: string
   isNew?: boolean
+  passengerCounts?: Record<string, number>
 }
 
 export type Role = 'sopir' | 'koordinator' | null

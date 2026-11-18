@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import type { Departure, Jalur, Segment, Vehicle } from "@/lib/data"
-import { JALUR, ME, SEGMENTS, VEHICLES, seg, uid } from "@/lib/data"
+import { JALUR, ME, SEGMENTS, VEHICLES, jalur, seg, uid } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { TopBar } from "./shared"
 import { getMasterData } from "@/lib/supabaseService"
@@ -61,6 +61,9 @@ export default function InputKeberangkatan({
       }
       setJalurList(m.jalurList || [])
       setVehicles(m.vehicles || [])
+      if (m.vehicles?.length) {
+        setVeh((prev) => prev || m.vehicles.find((v) => v.aktif)?.plat || "")
+      }
     })
   }, [isDemoDriver])
 
@@ -82,28 +85,31 @@ export default function InputKeberangkatan({
     const clean = veh.trim().toLowerCase()
     return vehicles.find((v) => {
       if (!v.aktif) return false
-      const full = `${v.cb} · ${v.plat}`.toLowerCase()
       return (
-        full === clean ||
-        v.cb.toLowerCase() === clean ||
         v.plat.toLowerCase() === clean ||
-        clean.includes(v.cb.toLowerCase())
+        v.cb?.toLowerCase() === clean ||
+        clean.includes(v.plat.toLowerCase())
       )
     })
   }, [vehicles, veh])
 
-  const cb = matchedVeh?.cb
+  const selectedPlat = matchedVeh?.plat || veh
 
   const make = (): Departure => {
     const s = segments.find((x) => x.id === segmentId) || seg(segmentId)
+    const j = jalurList.find((x) => x.id === jalurId) || jalur(jalurId)
+    const vehId = matchedVeh?.plat || matchedVeh?.cb || selectedPlat || vehicles.find((v) => v.aktif)?.plat || "D 7021 AB"
     return {
       id: uid(),
       date,
       time,
       segmentId,
       jalurId,
-      cb: cb || vehicles.find((v) => v.aktif)?.cb || "CB-1021",
+      jalurNama: j?.nama,
+      cb: vehId,
       driver: currentDriver,
+      driverId: currentUser?.id,
+      driverEmail: currentUser?.email,
       kmTempuh: null,
       kmEmpty: null,
       penumpang: null,
@@ -117,9 +123,10 @@ export default function InputKeberangkatan({
 
   const submit = () => {
     setTried(true)
-    if (!cb || !date || !time) return
+    if (!selectedPlat || !date || !time) return
+    const vehId = matchedVeh?.plat || matchedVeh?.cb || selectedPlat
     if (
-      deps.some((d) => d.cb === cb && d.time === time && d.jalurId === jalurId && d.date === date)
+      deps.some((d) => (d.cb === vehId || d.cb === selectedPlat) && d.time === time && d.jalurId === jalurId && d.date === date)
     ) {
       return setDup(true)
     }
@@ -138,15 +145,7 @@ export default function InputKeberangkatan({
             <input
               type="date"
               value={date}
-              min={todayReal}
-              onChange={(e) => {
-                const val = e.target.value
-                if (val && val < todayReal) {
-                  setDate(todayReal)
-                } else {
-                  setDate(val)
-                }
-              }}
+              onChange={(e) => setDate(e.target.value)}
               className={inputCls()}
             />
           </Field>
@@ -195,21 +194,21 @@ export default function InputKeberangkatan({
           </select>
         </Field>
         <Field
-          label="Kendaraan"
-          hint="Pilih nomor CB dan plat kendaraan"
-          error={tried && !cb ? "Pilih kendaraan dari daftar" : undefined}
+          label="Plat Nomor Kendaraan"
+          hint="Pilih plat nomor kendaraan yang beroperasi"
+          error={tried && !selectedPlat ? "Pilih kendaraan dari daftar" : undefined}
         >
           <select
             value={veh}
             onChange={(e) => setVeh(e.target.value)}
-            className={cx(inputCls(tried && !cb), "bg-white")}
+            className={cx(inputCls(tried && !selectedPlat), "bg-white")}
           >
-            <option value="">-- Pilih Kendaraan (CB / Plat) --</option>
+            <option value="">-- Pilih Plat Nomor Kendaraan --</option>
             {vehicles
               .filter((v) => v.aktif)
               .map((v) => (
-                <option key={v.cb} value={`${v.cb} · ${v.plat}`}>
-                  {v.cb} · {v.plat}
+                <option key={v.plat || v.cb} value={v.plat}>
+                  {v.plat}
                 </option>
               ))}
           </select>

@@ -7,6 +7,7 @@ import {
   DRIVERS,
   SEGMENTS,
   JALUR,
+  JENIS_PENUMPANG,
   calc,
   fmtDate,
   jalur,
@@ -15,6 +16,8 @@ import {
   rupiah,
   seg,
 } from "@/lib/data"
+import type { JenisPenumpang } from "@/types"
+import { supabase } from "@/lib/supabase"
 import {
   Btn,
   DateInput,
@@ -50,11 +53,17 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
   const [note, setNote] = useState("")
   const [segments, setSegments] = useState<Segment[]>(isDemo ? SEGMENTS : [])
   const [jalurList, setJalurList] = useState<Jalur[]>(isDemo ? JALUR : [])
+  const [passengerTypes, setPassengerTypes] = useState<JenisPenumpang[]>(
+    isDemo ? JENIS_PENUMPANG : [],
+  )
 
   useEffect(() => {
     getMasterData(isDemo).then((m) => {
       setSegments(m.segments || [])
       setJalurList(m.jalurList || [])
+      if (m.passengerTypes && m.passengerTypes.length > 0) {
+        setPassengerTypes(m.passengerTypes)
+      }
     })
   }, [isDemo])
 
@@ -70,7 +79,14 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
         .filter(
           (d) =>
             (!fd || d.date === fd) &&
-            (!fs || d.segmentId === fs) &&
+            (!fs ||
+              d.segmentId === fs ||
+              segments.some(
+                (s) =>
+                  s.id === fs &&
+                  ((s as any).rawId === d.segmentId ||
+                    (s as any).kode === d.segmentId),
+              )) &&
             (!fj || d.jalurId === fj) &&
             (!fdr || d.driver === fdr),
         )
@@ -79,7 +95,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
             Number(!!b.isNew) - Number(!!a.isNew) ||
             (b.date + b.time).localeCompare(a.date + a.time),
         ),
-    [deps, fd, fs, fj, fdr],
+    [deps, fd, fs, fj, fdr, segments],
   )
   const newCount = deps.filter((d) => d.isNew && d.status === "dikirim").length
   const total = deps.filter((d) => d.status === "dikirim").length
@@ -166,7 +182,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <DateInput
+        <DateInput
           aria-label="Tanggal"
           placeholder="dd/mm/yyyy"
           value={fd}
@@ -221,7 +237,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
         </div>
       ) : (
         <div className={tableWrap}>
-          <table className="w-full min-w-[980px]">
+          <table className="w-full min-w-[880px]">
             <thead className="border-b border-line bg-wash">
               <tr>
                 <th className={cx(th, "w-12")}>
@@ -242,7 +258,6 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
                   "KM",
                   "Pnp",
                   "Pendapatan",
-                  "UPP",
                 ].map((h, i) => (
                   <th key={h} className={cx(th, i >= 5 && "text-right")}>
                     {h}
@@ -252,7 +267,44 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
             </thead>
             <tbody>
               {rows.map((d) => {
-                const c = calc(d)
+                const segmentObj =
+                  segments.find(
+                    (s) =>
+                      s.id === d.segmentId ||
+                      (s as any).rawId === d.segmentId ||
+                      (s as any).kode === d.segmentId,
+                  ) || seg(d.segmentId)
+
+                const jalurObj =
+                  jalurList.find((j) => j.id === d.jalurId) || jalur(d.jalurId)
+
+                // Total penumpang dari semua jenis penumpang yang diinput sopir
+                const totalPax = (() => {
+                  if (
+                    d.passengerCounts &&
+                    Object.keys(d.passengerCounts).length > 0
+                  ) {
+                    return Object.values(d.passengerCounts).reduce(
+                      (acc, v) => acc + (Number(v) || 0),
+                      0,
+                    )
+                  }
+                  if (d.penumpang == null && d.pm == null) return null
+                  return (d.penumpang || 0) + (d.pm || 0)
+                })()
+
+                // Hitung total pendapatan sesuai perhitungan sopir
+                let paxRev = d.pendapatan
+                if (paxRev == null) {
+                  if (segmentObj.kontrak) {
+                    paxRev = segmentObj.nilaiTetap || 0
+                  } else {
+                    paxRev = (d.penumpang || 0) * (jalurObj.tarif || 0)
+                  }
+                }
+                const totalRevenue =
+                  (paxRev || 0) + (d.subsidi || 0) + (d.bagasi || 0)
+
                 return (
                   <tr
                     key={d.id}
@@ -288,21 +340,27 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
                       )}
                     </td>
                     <td className={td}>{d.driver}</td>
-                    <td className={td}>{seg(d.segmentId).nama}</td>
+                    <td className={td}>{segmentObj.nama}</td>
                     <td className={cx(td, "max-w-[220px] truncate")}>
-                      {jalur(d.jalurId).nama}
+                      {d.jalurNama || jalurObj.nama}
                     </td>
-                    <td className={cx(td, "num whitespace-nowrap")}>{d.cb}</td>
+                    <td className={cx(td, "num whitespace-nowrap")}>
+                      {plat(d.cb) || d.cb}
+                    </td>
                     <td className={cx(td, "num text-right")}>
                       {nf(d.kmTempuh)}
                     </td>
                     <td className={cx(td, "num text-right")}>
-                      {nf(d.penumpang)}
+                      <span className="font-semibold">{nf(totalPax)}</span>
+                      {d.pm != null && d.pm > 0 && d.penumpang != null && (
+                        <div className="text-[10px] font-sans text-mute">
+                          U: {d.penumpang} · P/M: {d.pm}
+                        </div>
+                      )}
                     </td>
-                    <td className={cx(td, "num whitespace-nowrap text-right")}>
-                      {rupiah(c.total)}
+                    <td className={cx(td, "num whitespace-nowrap text-right font-medium")}>
+                      {rupiah(totalRevenue)}
                     </td>
-                    <td className={cx(td, "num text-right")}>{nf(c.upp)}</td>
                   </tr>
                 )
               })}
@@ -369,7 +427,14 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           )
         }
       >
-        {detail && <DetailBody d={detail} />}
+        {detail && (
+          <DetailBody
+            d={detail}
+            segments={segments}
+            jalurList={jalurList}
+            passengerTypes={passengerTypes}
+          />
+        )}
       </Drawer>
 
       <Dialog
@@ -425,55 +490,340 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
   )
 }
 
-function DetailBody({ d }: { d: Departure }) {
-  const c = calc(d)
-  const rows: [string, string][] = [
-    ["Tanggal", `${fmtDate(d.date)} · ${d.time}`],
-    ["Sopir", d.driver],
-    ["Segmen", seg(d.segmentId).nama],
-    ["Jalur", jalur(d.jalurId).nama],
-    ["Kendaraan", `${d.cb} · ${plat(d.cb)}`],
-    ["KM tempuh", nf(d.kmTempuh) + " km"],
-    ["KM empty", nf(d.kmEmpty) + " km"],
-    ["Penumpang", nf(d.penumpang)],
-    ["P/M", nf(d.pm)],
-    ["Pendapatan", rupiah(d.pendapatan)],
-    ["Subsidi", rupiah(d.subsidi)],
-    ["Bagasi", rupiah(d.bagasi)],
-  ]
+function DetailBody({
+  d,
+  segments,
+  jalurList,
+  passengerTypes,
+}: {
+  d: Departure
+  segments: Segment[]
+  jalurList: Jalur[]
+  passengerTypes: JenisPenumpang[]
+}) {
+  const segmentObj =
+    segments.find(
+      (s) =>
+        s.id === d.segmentId ||
+        (s as any).rawId === d.segmentId ||
+        (s as any).kode === d.segmentId,
+    ) || seg(d.segmentId)
+  const jalurObj =
+    jalurList.find((j) => j.id === d.jalurId) || jalur(d.jalurId)
+
+  const [tarifItems, setTarifItems] = useState<
+    Array<{ id: string; nama: string; tarif: number }>
+  >([])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadTarifDanPenumpang() {
+      try {
+        const [paxsRes, tjRes] = await Promise.all([
+          supabase.from("jenis_penumpang").select("*").order("created_at"),
+          supabase
+            .from("tarif_jalur")
+            .select("*")
+            .eq("jalur_id", d.jalurId)
+            .order("berlaku_mulai", { ascending: false }),
+        ])
+
+        if (!active) return
+
+        const activePaxs = (paxsRes.data || []).filter((p: any) => p.aktif)
+        const items: Array<{ id: string; nama: string; tarif: number }> = []
+
+        if (tjRes.data && tjRes.data.length > 0) {
+          const seenPaxs = new Set<string>()
+          for (const row of tjRes.data) {
+            const paxId = row.jenis_penumpang_id || "umum"
+            if (!seenPaxs.has(paxId)) {
+              seenPaxs.add(paxId)
+              const matchedPax = activePaxs.find(
+                (p: any) => p.id === row.jenis_penumpang_id,
+              )
+              const paxNama = matchedPax?.nama || row.jenis_penumpang || "Umum"
+              items.push({
+                id: paxId,
+                nama: paxNama,
+                tarif: Number(row.tarif) || 0,
+              })
+            }
+          }
+        }
+
+        // Jika tidak ada data spesifik di tarif_jalur, gunakan fallback tarif jalur
+        if (items.length === 0) {
+          const defaultTarif = jalurObj?.tarif || 0
+          items.push({
+            id: "umum",
+            nama: "Umum",
+            tarif: defaultTarif,
+          })
+          if (d.pm != null && d.pm > 0) {
+            items.push({
+              id: "pm",
+              nama: "Pelajar / Mahasiswa (P/M)",
+              tarif: Math.round(defaultTarif * 0.7),
+            })
+          }
+        }
+
+        // Jika ada passengerCounts dari sopir yang belum tercantum, tambahkan agar tidak hilang
+        if (d.passengerCounts) {
+          for (const k of Object.keys(d.passengerCounts)) {
+            if (!items.some((it) => it.id === k)) {
+              const matched =
+                activePaxs.find((p: any) => p.id === k) ||
+                passengerTypes.find((p) => p.id === k)
+              items.push({
+                id: k,
+                nama: matched?.nama || k,
+                tarif: 0,
+              })
+            }
+          }
+        }
+
+        setTarifItems(items)
+      } catch (e) {
+        console.warn("Gagal memuat tarif:", e)
+        const defaultTarif = jalurObj?.tarif || 0
+        const items = [{ id: "umum", nama: "Umum", tarif: defaultTarif }]
+        if (d.pm != null && d.pm > 0) {
+          items.push({
+            id: "pm",
+            nama: "Pelajar / Mahasiswa (P/M)",
+            tarif: Math.round(defaultTarif * 0.7),
+          })
+        }
+        setTarifItems(items)
+      }
+    }
+
+    loadTarifDanPenumpang()
+    return () => {
+      active = false
+    }
+  }, [d.jalurId, d.passengerCounts, d.pm, jalurObj?.tarif, passengerTypes])
+
+  const getCount = (it: { id: string; nama: string }) => {
+    if (d.passengerCounts && d.passengerCounts[it.id] !== undefined) {
+      return d.passengerCounts[it.id]
+    }
+    if (it.id === "umum" || it.nama.toLowerCase().includes("umum")) {
+      return d.penumpang
+    }
+    if (
+      it.id === "pm" ||
+      it.nama.toLowerCase().includes("pelajar") ||
+      it.nama.toLowerCase().includes("p/m")
+    ) {
+      return d.pm
+    }
+    return null
+  }
+
+  const totalPax = (() => {
+    if (d.passengerCounts && Object.keys(d.passengerCounts).length > 0) {
+      return Object.values(d.passengerCounts).reduce(
+        (acc, v) => acc + (Number(v) || 0),
+        0,
+      )
+    }
+    if (d.penumpang == null && d.pm == null) return null
+    return (d.penumpang || 0) + (d.pm || 0)
+  })()
+
+  // Hitung pendapatan tiket penumpang sesuai nilai input sopir
+  const paxRevenue = segmentObj.kontrak
+    ? segmentObj.nilaiTetap || 0
+    : d.pendapatan != null
+      ? d.pendapatan
+      : tarifItems.reduce((acc, it) => acc + (getCount(it) || 0) * it.tarif, 0)
+
+  const totalRevenue = paxRevenue + (d.subsidi || 0) + (d.bagasi || 0)
+
   return (
-    <>
-      <StatusBadge status={d.status} />
-      <dl className="mt-4">
-        {rows.map(([a, b]) => (
-          <div
-            key={a}
-            className="flex justify-between gap-4 border-b border-line py-2.5 text-sm"
-          >
-            <dt className="text-mute">{a}</dt>
-            <dd className="num text-right">{b}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-5 rounded-xl bg-navy-50 p-4">
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-navy">
-          Hasil hitung otomatis
-        </p>
-        {[
-          [
-            "Tarif berlaku",
-            seg(d.segmentId).kontrak ? "Nilai tetap" : rupiah(c.tarif),
-          ],
-          ["Pendapatan umum", rupiah(c.umum)],
-          ["Total pendapatan", rupiah(c.total)],
-          ["UPP (Rp/km)", rupiah(c.upp)],
-        ].map(([a, b]) => (
-          <div key={a} className="flex justify-between py-1 text-sm">
-            <span className="text-mute">{a}</span>
-            <span className="num font-medium">{b}</span>
-          </div>
-        ))}
+    <div className="space-y-4">
+      {/* Header Info */}
+      <div className="flex items-center justify-between">
+        <StatusBadge status={d.status} rejected={!!d.rejectNote} />
+        <span className="num text-xs text-mute">
+          {fmtDate(d.date)} · {d.time}
+        </span>
       </div>
-    </>
+
+      {d.rejectNote && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3.5">
+          <p className="text-xs font-bold text-red-800">
+            Catatan penolakan sebelumnya
+          </p>
+          <p className="mt-1 text-sm text-red-900">{d.rejectNote}</p>
+        </div>
+      )}
+
+      {/* Rute & Kendaraan */}
+      <div className="rounded-xl bg-wash p-4 border border-line">
+        <p className="font-semibold text-ink">
+          {d.jalurNama || jalurObj.nama}
+        </p>
+        <p className="mt-0.5 text-sm text-mute">
+          {segmentObj.nama} ·{" "}
+          <span className="num font-medium text-ink">
+            {plat(d.cb) || d.cb}
+          </span>
+        </p>
+        <div className="mt-2.5 flex items-center justify-between border-t border-line/60 pt-2.5 text-xs text-mute">
+          <span>
+            Sopir: <strong className="font-semibold text-ink">{d.driver}</strong>
+          </span>
+        </div>
+      </div>
+
+      {/* 1 · Jarak */}
+      <div className="rounded-xl border border-line p-4">
+        <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-mute">
+          1 · Jarak
+        </h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-mute">KM tempuh</span>
+            <span className="num font-medium">{nf(d.kmTempuh)} km</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-mute">KM empty</span>
+            <span className="num font-medium">{nf(d.kmEmpty)} km</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2 · Penumpang (Dinamis sesuai jenis penumpang yang diinput sopir) */}
+      <div className="rounded-xl border border-line p-4">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-mute">
+            2 · Penumpang
+          </h3>
+          {totalPax != null && (
+            <span className="text-xs font-semibold text-navy">
+              Total: {nf(totalPax)} orang
+            </span>
+          )}
+        </div>
+        <div className="space-y-2.5 text-sm">
+          {tarifItems.length > 0 ? (
+            tarifItems.map((item) => {
+              const count = getCount(item)
+              const labelText = item.nama.toLowerCase().startsWith("penumpang")
+                ? item.nama
+                : `Penumpang ${item.nama}`
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between border-b border-line/50 pb-2 last:border-0 last:pb-0"
+                >
+                  <div>
+                    <span className="text-mute">{labelText}</span>
+                    {!segmentObj.kontrak && item.tarif > 0 && (
+                      <span className="ml-2 text-xs text-mute/80">
+                        ({rupiah(item.tarif)})
+                      </span>
+                    )}
+                  </div>
+                  <span className="num font-medium text-ink">
+                    {count != null ? `${nf(count)} orang` : "–"}
+                  </span>
+                </div>
+              )
+            })
+          ) : (
+            <div className="flex justify-between text-sm">
+              <span className="text-mute">Penumpang Umum</span>
+              <span className="num font-medium">{nf(d.penumpang)} orang</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3 · Pendapatan (Biaya Tambahan) */}
+      <div className="rounded-xl border border-line p-4">
+        <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-mute">
+          3 · Pendapatan & Biaya Tambahan
+        </h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-mute">
+              {segmentObj.kontrak
+                ? "Pendapatan kontrak"
+                : "Pendapatan tiket (penumpang)"}
+            </span>
+            <span className="num font-medium">{rupiah(paxRevenue)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-mute">Subsidi</span>
+            <span className="num font-medium">{rupiah(d.subsidi ?? 0)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-mute">Bagasi</span>
+            <span className="num font-medium">{rupiah(d.bagasi ?? 0)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4 · Jumlah Pendapatan (Sesuai tampilan 4 · Jumlah Pendapatan Sopir) */}
+      <div className="rounded-xl bg-ink p-4 text-white">
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/60">
+          4 · Jumlah Pendapatan
+        </h3>
+        <div className="space-y-3">
+          {/* Tarif berlaku */}
+          <div className="border-b border-white/10 pb-3">
+            <span className="text-sm font-medium text-white/70">
+              Tarif berlaku
+            </span>
+            <div className="mt-2 space-y-1.5 pl-1">
+              {segmentObj.kontrak ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/80">Nilai tetap (Kontrak)</span>
+                  <span className="num font-semibold text-white">
+                    {rupiah(segmentObj.nilaiTetap)}
+                  </span>
+                </div>
+              ) : tarifItems.length > 0 ? (
+                tarifItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <span className="text-white/80">{item.nama}</span>
+                    <span className="num font-semibold text-white">
+                      {rupiah(item.tarif)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/80">Umum</span>
+                  <span className="num font-semibold text-white">
+                    {rupiah(jalurObj?.tarif || 0)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Total pendapatan */}
+          <div className="flex items-baseline justify-between pt-1">
+            <span className="text-sm font-semibold text-white/90">
+              Total pendapatan
+            </span>
+            <span className="num text-xl font-bold text-emerald-400">
+              {rupiah(totalRevenue)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

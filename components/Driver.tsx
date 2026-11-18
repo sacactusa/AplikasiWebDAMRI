@@ -12,7 +12,7 @@ import ProfilSopir from "./driver/ProfilSopir"
 import InputKeberangkatan from "./driver/InputKeberangkatan"
 import DetailKeberangkatan from "./driver/DetailKeberangkatan"
 import { DRIVER_PHOTO, type DriverProfile } from "./driver/shared"
-import { createDeparture, updateDeparture } from "@/lib/supabaseService"
+import { createDeparture, updateDeparture, deleteDraftDeparture } from "@/lib/supabaseService"
 
 interface Props {
   deps: Departure[]
@@ -87,9 +87,17 @@ export default function Driver({
   const mine = useMemo(
     () =>
       deps
-        .filter((d) => (isDemoDriver ? d.driver === ME : d.driver === profile.nama))
+        .filter((d) => {
+          if (isDemoDriver) return d.driver === ME
+          return (
+            (currentUser?.id && d.driverId === currentUser.id) ||
+            (currentUser?.email && d.driverEmail?.toLowerCase() === currentUser.email.toLowerCase()) ||
+            d.driver === profile.nama ||
+            (currentUser?.nama && d.driver.toLowerCase() === currentUser.nama.toLowerCase())
+          )
+        })
         .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)),
-    [deps, profile.nama, isDemoDriver],
+    [deps, profile.nama, currentUser, isDemoDriver],
   )
   const pendingRevisions = useMemo(
     () => mine.filter((d) => Boolean(d.rejectNote)).length,
@@ -104,6 +112,25 @@ export default function Driver({
   const showNav =
     view.n === "list" || view.n === "riwayat" || view.n === "profil"
 
+  const handleDeleteDraft = async (id: string) => {
+    const target = deps.find((d) => d.id === id)
+    if (!target || target.status !== "draft") {
+      toast("Hanya draft yang dapat dihapus")
+      return
+    }
+
+    setDeps((prev) => prev.filter((d) => d.id !== id))
+    toast("Draft keberangkatan berhasil dihapus")
+
+    if (!isDemoDriver) {
+      await deleteDraftDeparture(id, profile.nama)
+    }
+
+    if (view.n === "detail" && view.id === id) {
+      setView({ n: lastTabRef.current })
+    }
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-white sm:border-x sm:border-line">
       <div className="flex-1 pb-28">
@@ -116,6 +143,7 @@ export default function Driver({
               setView({ n: "detail", id })
             }}
             onAdd={() => setView({ n: "add" })}
+            onDeleteDraft={handleDeleteDraft}
           />
         )}
         {view.n === "riwayat" && (
@@ -167,6 +195,8 @@ export default function Driver({
                 if (res.id && res.id !== d.id) {
                   setDeps((p) => p.map((x) => (x.id === d.id ? { ...x, id: res.id! } : x)))
                   setView((v) => (v.n === "detail" && v.id === d.id ? { n: "detail", id: res.id! } : v))
+                } else if (!res.success) {
+                  toast("Gagal sinkron ke database Supabase", "error")
                 }
               }
             }}
@@ -193,6 +223,7 @@ export default function Driver({
               dep={targetDep}
               offline={offline}
               onBack={() => setView({ n: lastTabRef.current })}
+              onDeleteDraft={handleDeleteDraft}
               onSave={(d) => {
                 setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
                 if (!isDemoDriver) {

@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
-import type { Departure, Jalur, Segment, Vehicle } from "@/types"
-import { JALUR, SEGMENTS, VEHICLES, SEED, AUDIT } from "./data"
+import type { Departure, Jalur, Segment, Vehicle, JenisPenumpang } from "@/types"
+import { JALUR, SEGMENTS, VEHICLES, SEED, AUDIT, JENIS_PENUMPANG } from "./data"
 
 export interface AuditItem {
   id?: number | string
@@ -50,30 +50,40 @@ export async function getMasterData(isDemo = false): Promise<{
   segments: Segment[]
   jalurList: Jalur[]
   vehicles: Vehicle[]
+  passengerTypes: JenisPenumpang[]
 }> {
   if (isDemo) {
-    return { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES }
+    return {
+      segments: SEGMENTS,
+      jalurList: JALUR,
+      vehicles: VEHICLES,
+      passengerTypes: JENIS_PENUMPANG,
+    }
   }
 
   try {
-    const [segRes, jalRes, vehRes, tarRes] = await Promise.all([
+    const [segRes, jalRes, vehRes, tarRes, paxRes] = await Promise.all([
       supabase.from("segmen").select("*").order("nama"),
       supabase.from("jalur").select("*").order("nama"),
-      supabase.from("kendaraan").select("*").order("kode_cb"),
+      supabase.from("kendaraan").select("*").order("plat"),
       supabase
         .from("tarif_jalur")
         .select("*")
         .order("berlaku_mulai", { ascending: false }),
+      supabase.from("jenis_penumpang").select("*").order("created_at"),
     ])
 
-    // Jika terjadi error koneksi ke Supabase, kembalikan array kosong untuk akun riil
-    if (segRes.error || jalRes.error || vehRes.error) {
-      console.warn("Gagal memuat master data dari Supabase (koneksi/skema bermasalah):", {
-        seg: segRes.error,
-        jal: jalRes.error,
-        veh: vehRes.error,
-      })
-      return { segments: [], jalurList: [], vehicles: [] }
+    if (segRes.error) {
+      console.warn("Gagal memuat segmen dari Supabase:", segRes.error)
+    }
+    if (jalRes.error) {
+      console.warn("Gagal memuat jalur dari Supabase:", jalRes.error)
+    }
+    if (vehRes.error) {
+      console.warn("Gagal memuat kendaraan dari Supabase:", vehRes.error)
+    }
+    if (tarRes.error) {
+      console.warn("Gagal memuat tarif dari Supabase:", tarRes.error)
     }
 
     // Map Segmen (jika kosong, tetap kembalikan array kosong [])
@@ -115,19 +125,43 @@ export async function getMasterData(isDemo = false): Promise<{
 
     // Map Kendaraan
     const vehicles: Vehicle[] = (vehRes.data || []).map((v) => ({
-      cb: v.kode_cb,
+      cb: v.plat || v.id,
       plat: v.plat,
-      aktif: Boolean(v.aktif),
+      aktif: v.aktif !== undefined ? Boolean(v.aktif) : true,
     }))
+
+    // Map Jenis Penumpang
+    let paxData: any[] = paxRes.data || []
+    if (paxRes.error) {
+      const p2 = await supabase.from("penumpang").select("*").order("created_at")
+      if (!p2.error && p2.data) {
+        paxData = p2.data
+      }
+    }
+
+    const passengerTypes: JenisPenumpang[] = paxData.length > 0
+      ? paxData.map((p) => ({
+          id: p.id,
+          nama: p.nama || p.jenis || "Umum",
+          aktif: p.aktif !== undefined ? Boolean(p.aktif) : true,
+          rawId: p.id,
+        }))
+      : (isDemo ? JENIS_PENUMPANG : [
+          { id: "umum", nama: "Umum", aktif: true },
+          { id: "pm", nama: "Pelajar / Mahasiswa (P/M)", aktif: true },
+        ])
 
     return {
       segments,
       jalurList,
       vehicles,
+      passengerTypes,
     }
   } catch (err) {
     console.warn("Gagal memuat master data dari Supabase:", err)
-    return isDemo ? { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES } : { segments: [], jalurList: [], vehicles: [] }
+    return isDemo
+      ? { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES, passengerTypes: JENIS_PENUMPANG }
+      : { segments: [], jalurList: [], vehicles: [], passengerTypes: JENIS_PENUMPANG }
   }
 }
 
@@ -136,7 +170,7 @@ export async function getMasterData(isDemo = false): Promise<{
  * Jika isDemo = true (akun demo sopir@damri.co.id / koordinator@damri.co.id):
  *   -> Menggunakan data demo (SEED).
  * Jika isDemo = false (akun riil terdaftar):
- *   -> Mengambil HANYA dari Supabase view v_keberangkatan (jika kosong, kembalikan []).
+ *   -> Mengambil dari tabel keberangkatan Supabase dengan relasi lengkap.
  */
 export async function getDepartures(isDemo = false): Promise<Departure[]> {
   if (isDemo) {
@@ -145,8 +179,14 @@ export async function getDepartures(isDemo = false): Promise<Departure[]> {
 
   try {
     const { data, error } = await supabase
-      .from("v_keberangkatan")
-      .select("*")
+      .from("keberangkatan")
+      .select(`
+        *,
+        segmen:segmen_id(id, nama, kode),
+        jalur:jalur_id(id, nama),
+        kendaraan:kendaraan_id(id, plat),
+        sopir:sopir_id(id, nama, email)
+      `)
       .order("tanggal", { ascending: false })
       .order("jam", { ascending: false })
 
@@ -155,15 +195,17 @@ export async function getDepartures(isDemo = false): Promise<Departure[]> {
       return []
     }
 
-    return data.map((r): Departure => ({
+    return data.map((r: any): Departure => ({
       id: r.id,
       date: r.tanggal,
       time: typeof r.jam === "string" ? r.jam.slice(0, 5) : r.jam,
-      segmentId: r.segmen_kode || r.segmen_id,
+      segmentId: r.segmen?.kode || r.segmen_id,
       jalurId: r.jalur_id,
-      jalurNama: r.jalur_nama || undefined,
-      cb: r.cb,
-      driver: r.sopir_nama || "Sopir",
+      jalurNama: r.jalur?.nama || undefined,
+      cb: r.kendaraan?.plat || r.kendaraan_id || "D 7021 AB",
+      driver: r.sopir?.nama || "Sopir",
+      driverId: r.sopir?.id || r.sopir_id,
+      driverEmail: r.sopir?.email,
       kmTempuh: r.km_tempuh != null ? Number(r.km_tempuh) : null,
       kmEmpty: r.km_empty != null ? Number(r.km_empty) : null,
       penumpang: r.penumpang != null ? Number(r.penumpang) : null,
@@ -227,22 +269,30 @@ async function resolveIds(d: Departure, driverEmail?: string) {
       const res = await supabase.from("kendaraan").select("id").eq("id", d.cb).limit(1)
       if (res.data?.[0]?.id) return res.data[0].id
     }
-    const byCb = await supabase.from("kendaraan").select("id").eq("kode_cb", d.cb).limit(1)
-    if (byCb.data?.[0]?.id) return byCb.data[0].id
+    const cleanPlat = (d.cb || "").trim().replace(/\s+/g, " ")
+    if (cleanPlat) {
+      const byPlat = await supabase.from("kendaraan").select("id").ilike("plat", `%${cleanPlat}%`).limit(1)
+      if (byPlat.data?.[0]?.id) return byPlat.data[0].id
+    }
     const def = await supabase.from("kendaraan").select("id").limit(1)
     return def.data?.[0]?.id
   }
 
   // 4. Resolve Profil Sopir
   const resolveProf = async () => {
+    if (d.driverId && UUID_REGEX.test(d.driverId)) {
+      return d.driverId
+    }
     if (driverEmail) {
       const byEmail = await supabase.from("profiles").select("id").eq("email", driverEmail).limit(1)
       if (byEmail.data?.[0]?.id) return byEmail.data[0].id
     }
     if (d.driver) {
-      const byName = await supabase.from("profiles").select("id").eq("nama", d.driver).limit(1)
+      const byName = await supabase.from("profiles").select("id").ilike("nama", d.driver).limit(1)
       if (byName.data?.[0]?.id) return byName.data[0].id
     }
+    const anySopir = await supabase.from("profiles").select("id").eq("role", "sopir").limit(1)
+    if (anySopir.data?.[0]?.id) return anySopir.data[0].id
     const anyProf = await supabase.from("profiles").select("id").limit(1)
     return anyProf.data?.[0]?.id
   }
@@ -370,6 +420,43 @@ export async function updateDeparture(
     return true
   } catch (err) {
     console.error("Gagal updateDeparture ke Supabase:", err)
+    return false
+  }
+}
+
+/**
+ * Menghapus keberangkatan bertatus draft (Sopir)
+ * Hanya draft yang dapat dihapus.
+ */
+export async function deleteDraftDeparture(
+  id: string,
+  userNama = "Sopir",
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("keberangkatan")
+      .delete()
+      .eq("id", id)
+      .eq("status", "draft")
+
+    if (error) {
+      console.error("Error delete draft keberangkatan:", error)
+      return false
+    }
+
+    await logAudit({
+      user_nama: userNama,
+      aksi: "Hapus",
+      tabel: "keberangkatan",
+      record_id: id,
+      objek: `keberangkatan draft · ${id}`,
+      sebelum: { status: "draft" },
+      sesudah: {},
+    })
+
+    return true
+  } catch (err) {
+    console.error("Gagal deleteDraftDeparture ke Supabase:", err)
     return false
   }
 }

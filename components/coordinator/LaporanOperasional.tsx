@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { getMasterData } from "@/lib/supabaseService"
 import type { Segment, Jalur } from "@/lib/data"
 import { Download, LoaderCircle } from "lucide-react"
 import type { Departure } from "@/lib/data"
-import { JALUR, SEGMENTS, nf, rupiah } from "@/lib/data"
+import { JALUR, SEGMENTS, fmtDate, nf, rupiah } from "@/lib/data"
 import { Btn, Empty, cx } from "@/components/ui"
 import { Title, th, td, tableWrap, useRange, RangePicker, agg } from "./shared"
 import { exportLaporanAK15 } from "@/lib/excelExport"
@@ -18,10 +18,34 @@ interface Props {
 
 export default function LaporanOperasional({ deps, toast, currentUser }: Props) {
   const isDemo = currentUser?.email === "koordinator@damri.co.id"
-  const r = useRange()
+  const r = useRange("harian")
   const [busy, setBusy] = useState(false)
   const [segments, setSegments] = useState<Segment[]>(isDemo ? SEGMENTS : [])
   const [jalurList, setJalurList] = useState<Jalur[]>(isDemo ? JALUR : [])
+
+  // Cari tanggal keberangkatan disetujui terbaru
+  const latestApprovedDate = useMemo(() => {
+    const approvedDates = deps
+      .filter((d) => d.status === "disetujui")
+      .map((d) => d.date)
+      .sort((a, b) => b.localeCompare(a))
+    return approvedDates[0] || null
+  }, [deps])
+
+  // Sinkronisasi otomatis ke tanggal data disetujui terbaru jika pada tanggal hari ini belum ada data
+  const hasAutoAdjusted = useRef(false)
+  useEffect(() => {
+    if (!hasAutoAdjusted.current && latestApprovedDate) {
+      const currentAnchorHasData = deps.some(
+        (d) => d.status === "disetujui" && d.date === r.anchor,
+      )
+      if (!currentAnchorHasData) {
+        r.setAnchor(latestApprovedDate)
+        r.setTo(latestApprovedDate)
+      }
+      hasAutoAdjusted.current = true
+    }
+  }, [latestApprovedDate, deps, r])
 
   useEffect(() => {
     getMasterData(isDemo).then((m) => {
@@ -68,12 +92,46 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
       </h2>
       {approved.length === 0 ? (
         <div className="rounded-xl border border-line">
-          <Empty title="Tidak ada data pada periode ini" />
+          <Empty
+            title={
+              r.mode === "harian"
+                ? `Tidak ada data disetujui pada ${fmtDate(r.anchor)}`
+                : "Tidak ada data disetujui pada periode ini"
+            }
+            hint={
+              latestApprovedDate ? (
+                <span>
+                  Keberangkatan terakhir yang disetujui ada pada tanggal{" "}
+                  <strong className="font-semibold text-ink">{fmtDate(latestApprovedDate)}</strong>.
+                </span>
+              ) : (
+                "Silakan pilih periode atau tanggal yang memiliki data disetujui."
+              )
+            }
+            action={
+              latestApprovedDate && latestApprovedDate !== r.anchor ? (
+                <Btn
+                  variant="outline"
+                  onClick={() => {
+                    r.setAnchor(latestApprovedDate)
+                    r.setMode("harian")
+                  }}
+                >
+                  Lihat data {fmtDate(latestApprovedDate)}
+                </Btn>
+              ) : undefined
+            }
+          />
         </div>
       ) : (
         <div className="space-y-4">
           {segments.map((s) => {
-            const l = approved.filter((d) => d.segmentId === s.id)
+            const l = approved.filter(
+              (d) =>
+                d.segmentId === s.id ||
+                ((s as any).rawId && d.segmentId === (s as any).rawId) ||
+                ((s as any).kode && d.segmentId === (s as any).kode),
+            )
             if (!l.length) return null
             const a = agg(l)
             return (
@@ -94,7 +152,16 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
                     </tr>
                   </thead>
                   <tbody>
-                    {jalurList.filter((j) => j.segmentId === s.id || (j as any).segmen_id === s.id).map((j) => {
+                    {jalurList
+                      .filter(
+                        (j) =>
+                          j.segmentId === s.id ||
+                          (j as any).segmen_id === s.id ||
+                          ((s as any).rawId &&
+                            (j.segmentId === (s as any).rawId ||
+                              (j as any).segmen_id === (s as any).rawId)),
+                      )
+                      .map((j) => {
                       const x = agg(l.filter((d) => d.jalurId === j.id))
                       return x.rit ? (
                         <tr key={j.id} className="border-t border-line">

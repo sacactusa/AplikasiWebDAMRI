@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { getMasterData } from "@/lib/supabaseService"
 import type { Segment, Jalur } from "@/lib/data"
 import { Clock3, Download } from "lucide-react"
@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts"
 import type { Departure } from "@/lib/data"
-import { JALUR, SEGMENTS, fmtDate, nf, rupiah, seg } from "@/lib/data"
+import { JALUR, SEGMENTS, fmtDate, jalur, nf, rupiah, seg } from "@/lib/data"
 import { Btn, Empty, LiveDateTime, cx } from "@/components/ui"
 import {
   Title,
@@ -24,6 +24,7 @@ import {
   useRange,
   RangePicker,
   agg,
+  addDays,
   type Page,
 } from "./shared"
 
@@ -35,10 +36,34 @@ interface Props {
 
 export default function DashboardAnalitik({ deps, go, currentUser }: Props) {
   const isDemo = currentUser?.email === "koordinator@damri.co.id"
-  const r = useRange()
+  const r = useRange("harian")
   const [sg, setSg] = useState("all")
   const [segments, setSegments] = useState<Segment[]>(isDemo ? SEGMENTS : [])
   const [jalurList, setJalurList] = useState<Jalur[]>(isDemo ? JALUR : [])
+
+  // Cari tanggal keberangkatan disetujui terbaru
+  const latestApprovedDate = useMemo(() => {
+    const approvedDates = deps
+      .filter((d) => d.status === "disetujui")
+      .map((d) => d.date)
+      .sort((a, b) => b.localeCompare(a))
+    return approvedDates[0] || null
+  }, [deps])
+
+  // Sinkronisasi otomatis ke tanggal data disetujui terbaru jika pada tanggal hari ini belum ada data
+  const hasAutoAdjusted = useRef(false)
+  useEffect(() => {
+    if (!hasAutoAdjusted.current && latestApprovedDate) {
+      const currentAnchorHasData = deps.some(
+        (d) => d.status === "disetujui" && d.date === r.anchor,
+      )
+      if (!currentAnchorHasData) {
+        r.setAnchor(latestApprovedDate)
+        r.setTo(latestApprovedDate)
+      }
+      hasAutoAdjusted.current = true
+    }
+  }, [latestApprovedDate, deps, r])
 
   useEffect(() => {
     getMasterData(isDemo).then((m) => {
@@ -51,29 +76,83 @@ export default function DashboardAnalitik({ deps, go, currentUser }: Props) {
       d.status === "disetujui" && d.date >= r.range[0] && d.date <= r.range[1],
   )
   const scoped =
-    sg === "all" ? approved : approved.filter((d) => d.segmentId === sg)
+    sg === "all"
+      ? approved
+      : approved.filter(
+          (d) =>
+            d.segmentId === sg ||
+            segments.some(
+              (s) =>
+                s.id === sg &&
+                ((s as any).rawId === d.segmentId ||
+                  (s as any).kode === d.segmentId),
+            ),
+        )
   const t = agg(approved)
   const bySeg = segments.map((s) => ({
     id: s.id,
     nama: s.nama,
-    ...agg(approved.filter((d) => d.segmentId === s.id)),
+    ...agg(
+      approved.filter(
+        (d) =>
+          d.segmentId === s.id ||
+          ((s as any).rawId && d.segmentId === (s as any).rawId) ||
+          ((s as any).kode && d.segmentId === (s as any).kode),
+      ),
+    ),
   }))
-  const days = [...new Set(scoped.map((d) => d.date))].sort()
-  const trend = days.map((day) => ({
+  const trendDays = useMemo(() => {
+    if (r.mode === "harian" || r.mode === "mingguan") {
+      const list: string[] = []
+      for (let i = 6; i >= 0; i--) {
+        list.push(addDays(r.anchor, -i))
+      }
+      return list
+    }
+    const uniq = [...new Set(scoped.map((d) => d.date))].sort()
+    return uniq.length > 0 ? uniq : [r.anchor]
+  }, [r.mode, r.anchor, scoped])
+
+  const trend = trendDays.map((day) => ({
     tgl: fmtDate(day).slice(0, 6),
     pendapatan: agg(scoped.filter((d) => d.date === day)).total,
   }))
-  const perJalur = jalurList.map((j) => ({
-    j,
-    ...agg(scoped.filter((d) => d.jalurId === j.id)),
-  })).filter((x) => x.rit > 0)
 
-  const kpi: [string, string][] = [
-    ["KM tempuh", nf(t.km)],
-    ["Penumpang", nf(t.pnp)],
-    ["Pendapatan umum", rupiah(t.umum)],
-    ["UPP (Rp/km)", nf(t.upp)],
-    ["SO", nf(t.so)],
+  const perJalur = useMemo(() => {
+    const map = new Map<string, { id: string; nama: string; segmentId: string }>()
+    for (const j of jalurList) {
+      map.set(j.id, { id: j.id, nama: j.nama, segmentId: j.segmentId })
+    }
+    for (const d of scoped) {
+      if (d.jalurId && !map.has(d.jalurId)) {
+        map.set(d.jalurId, {
+          id: d.jalurId,
+          nama: d.jalurNama || jalur(d.jalurId).nama,
+          segmentId: d.segmentId,
+        })
+      }
+    }
+    return Array.from(map.values())
+      .map((j) => {
+        const list = scoped.filter(
+          (d) =>
+            d.jalurId === j.id ||
+            (d.jalurNama && d.jalurNama.toLowerCase() === j.nama.toLowerCase()),
+        )
+        return {
+          j,
+          ...agg(list),
+        }
+      })
+      .filter((x) => x.rit > 0)
+  }, [jalurList, scoped])
+
+  // KPI Dashboard: tanpa UPP, menampilkan Total Pendapatan yang akurat
+  const kpi: [string, string, boolean?][] = [
+    ["KM tempuh", nf(t.km) + " km"],
+    ["Penumpang", nf(t.pnp) + " orang"],
+    ["Total pendapatan", rupiah(t.total), true],
+    ["SO (Kendaraan)", nf(t.so)],
     ["RIT", nf(t.rit)],
   ]
 
@@ -101,19 +180,54 @@ export default function DashboardAnalitik({ deps, go, currentUser }: Props) {
       {approved.length === 0 ? (
         <div className="mt-6 rounded-xl border border-line">
           <Empty
-            title="Belum ada data disetujui"
-            hint="Ubah periode untuk melihat rekap produksi."
+            title={
+              r.mode === "harian"
+                ? `Tidak ada data disetujui pada ${fmtDate(r.anchor)}`
+                : "Tidak ada data disetujui pada periode ini"
+            }
+            hint={
+              latestApprovedDate ? (
+                <span>
+                  Keberangkatan terakhir yang disetujui ada pada tanggal{" "}
+                  <strong className="font-semibold text-ink">{fmtDate(latestApprovedDate)}</strong>.
+                </span>
+              ) : (
+                "Keberangkatan yang disetujui oleh Koordinator di menu Verifikasi akan tampil di sini."
+              )
+            }
+            action={
+              latestApprovedDate && latestApprovedDate !== r.anchor ? (
+                <Btn
+                  variant="outline"
+                  onClick={() => {
+                    r.setAnchor(latestApprovedDate)
+                    r.setMode("harian")
+                  }}
+                >
+                  Lihat data {fmtDate(latestApprovedDate)}
+                </Btn>
+              ) : (
+                <Btn onClick={() => r.setMode("mingguan")}>
+                  Beralih ke Mingguan
+                </Btn>
+              )
+            }
           />
         </div>
       ) : (
         <>
-          <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line lg:grid-cols-6">
-            {kpi.map(([a, b]) => (
+          <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-3 lg:grid-cols-5">
+            {kpi.map(([a, b, isSpecial]) => (
               <div key={a} className="bg-white p-4 transition hover:bg-navy-50">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-navy/70">
                   {a}
                 </p>
-                <p className="num mt-2 truncate text-xl font-medium sm:text-2xl">
+                <p
+                  className={cx(
+                    "num mt-2 truncate text-xl font-medium sm:text-2xl",
+                    isSpecial ? "font-bold text-emerald-600" : "text-ink",
+                  )}
+                >
                   {b}
                 </p>
               </div>
@@ -178,7 +292,15 @@ export default function DashboardAnalitik({ deps, go, currentUser }: Props) {
             </div>
             <div className="rounded-xl border border-line p-5">
               <h2 className="mb-4 text-sm font-semibold">
-                Tren harian · {sg === "all" ? "Semua segmen" : seg(sg).nama}
+                Tren pendapatan ·{" "}
+                {sg === "all"
+                  ? "Semua segmen"
+                  : segments.find(
+                      (s) =>
+                        s.id === sg ||
+                        (s as any).rawId === sg ||
+                        (s as any).kode === sg,
+                    )?.nama || seg(sg).nama}
               </h2>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={trend}>
@@ -216,7 +338,7 @@ export default function DashboardAnalitik({ deps, go, currentUser }: Props) {
             <table className="w-full min-w-[640px]">
               <thead className="border-b border-line bg-wash">
                 <tr>
-                  {["Jalur", "SO", "RIT", "Penumpang", "UPP (Rp/km)"].map(
+                  {["Jalur", "SO", "RIT", "Penumpang", "Pendapatan"].map(
                     (h, i) => (
                       <th key={h} className={cx(th, i > 0 && "text-right")}>
                         {h}
@@ -234,22 +356,29 @@ export default function DashboardAnalitik({ deps, go, currentUser }: Props) {
                     <td className={td}>
                       {x.j.nama}{" "}
                       <span className="text-xs text-mute">
-                        · {seg(x.j.segmentId).nama}
+                        ·{" "}
+                        {segments.find(
+                          (s) =>
+                            s.id === x.j.segmentId ||
+                            (s as any).rawId === x.j.segmentId ||
+                            (s as any).kode === x.j.segmentId,
+                        )?.nama || seg(x.j.segmentId).nama}
                       </span>
                     </td>
                     <td className={cx(td, "num text-right")}>{x.so}</td>
                     <td className={cx(td, "num text-right")}>{x.rit}</td>
                     <td className={cx(td, "num text-right")}>{nf(x.pnp)}</td>
-                    <td className={cx(td, "num text-right")}>{nf(x.upp)}</td>
+                    <td className={cx(td, "num text-right font-medium text-emerald-700")}>
+                      {rupiah(x.total)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <p className="mt-3 text-xs text-mute">
-            SO = kendaraan yang beroperasi · RIT = jumlah keberangkatan · UPP =
-            total pendapatan ÷ KM tempuh. Rumus final menunggu berkas AK 15 dari
-            DAMRI.
+            SO = kendaraan yang beroperasi · RIT = jumlah keberangkatan · Pendapatan =
+            akumulasi pendapatan tiket/kontrak, subsidi, dan bagasi.
           </p>
         </>
       )}

@@ -51,20 +51,32 @@ export function Title({
 export type Mode = "harian" | "mingguan" | "bulanan" | "rentang"
 
 export const addDays = (iso: string, n: number) => {
-  const d = new Date(iso + "T00:00:00")
+  const d = new Date(iso + "T12:00:00")
   d.setDate(d.getDate() + n)
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
 }
 
-export function useRange() {
-  const [mode, setMode] = useState<Mode>("mingguan")
+export function useRange(defaultMode: Mode = "harian") {
+  const [mode, setMode] = useState<Mode>(defaultMode)
   const [anchor, setAnchor] = useState(TODAY)
   const [to, setTo] = useState(TODAY)
   const range = useMemo<[string, string]>(() => {
     if (mode === "harian") return [anchor, anchor]
     if (mode === "mingguan") return [addDays(anchor, -6), anchor]
-    if (mode === "bulanan")
-      return [anchor.slice(0, 8) + "01", anchor.slice(0, 8) + "31"]
+    if (mode === "bulanan") {
+      const year = Number(anchor.slice(0, 4))
+      const month = Number(anchor.slice(5, 7))
+      const lastDay = new Date(year, month, 0).getDate()
+      const yStr = String(year)
+      const mStr = String(month).padStart(2, "0")
+      return [
+        `${yStr}-${mStr}-01`,
+        `${yStr}-${mStr}-${String(lastDay).padStart(2, "0")}`,
+      ]
+    }
     return [anchor, to]
   }, [mode, anchor, to])
   return { mode, setMode, anchor, setAnchor, to, setTo, range }
@@ -122,7 +134,14 @@ export function agg(list: Departure[]) {
   list.forEach((d) => {
     const c = calc(d)
     km += d.kmTempuh ?? 0
-    pnp += d.penumpang ?? 0
+    const paxCount =
+      d.passengerCounts && Object.keys(d.passengerCounts).length > 0
+        ? Object.values(d.passengerCounts).reduce(
+            (acc, v) => acc + (Number(v) || 0),
+            0,
+          )
+        : (d.penumpang ?? 0) + (d.pm ?? 0)
+    pnp += paxCount
     umum += c.umum
     total += c.total
     cbs.add(d.cb)

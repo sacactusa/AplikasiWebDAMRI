@@ -381,12 +381,11 @@ export default function RiwayatSopir({ mine, nama, onOpen }: Props) {
                   {/* Trayek & Armada Bus */}
                   <div className="mt-3">
                     <p className="text-base font-bold text-ink leading-snug">
-                      {jalur(d.jalurId).nama}
+                      {d.jalurNama || jalur(d.jalurId).nama}
                     </p>
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-mute">
                       <Bus size={13} className="text-navy" />
-                      <span className="num font-semibold text-ink">{d.cb}</span> ·{" "}
-                      <span className="num">{plat(d.cb)}</span> ·{" "}
+                      <span className="num font-semibold text-ink">{plat(d.cb) || d.cb}</span> ·{" "}
                       <span>{seg(d.segmentId).nama}</span>
                     </p>
                   </div>

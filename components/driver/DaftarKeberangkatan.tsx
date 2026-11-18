@@ -9,10 +9,11 @@ import {
   Clock,
   FileText,
   Plus,
+  Trash2,
 } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { calc, fmtDate, jalur, plat, rupiah, seg } from "@/lib/data"
-import { Empty, LiveDateTime, StatusBadge, cx } from "@/components/ui"
+import { Btn, Dialog, Empty, LiveDateTime, StatusBadge, cx } from "@/components/ui"
 import { DRIVER_PHOTO } from "./shared"
 
 interface Props {
@@ -20,12 +21,14 @@ interface Props {
   nama: string
   onOpen: (id: string) => void
   onAdd?: () => void
+  onDeleteDraft?: (id: string) => void
 }
 
 type TabFilter = "all" | "draft" | "dikirim" | "revisi" | "disetujui"
 
-export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd }: Props) {
+export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDeleteDraft }: Props) {
   const [f, setF] = useState<TabFilter>("all")
+  const [deleteDraftTarget, setDeleteDraftTarget] = useState<Departure | null>(null)
 
   // Hitung jumlah keberangkatan berdasarkan masing-masing status
   const draftCount = useMemo(
@@ -381,11 +384,10 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd }: Props
                   </div>
 
                   <p className="mt-2 font-semibold leading-snug">
-                    {jalur(d.jalurId).nama}
+                    {d.jalurNama || jalur(d.jalurId).nama}
                   </p>
                   <p className="mt-0.5 flex items-center gap-1.5 text-sm text-mute">
-                    <Bus size={14} /> <span className="num">{d.cb}</span> ·{" "}
-                    <span className="num">{plat(d.cb)}</span> ·{" "}
+                    <Bus size={14} /> <span className="num">{plat(d.cb) || d.cb}</span> ·{" "}
                     {seg(d.segmentId).nama}
                   </p>
 
@@ -402,8 +404,22 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd }: Props
                     </p>
                   )}
 
-                  <div className="mt-3 flex items-end justify-between border-t border-line pt-3">
-                    <span className="text-xs text-mute">Pendapatan</span>
+                  <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+                    {d.status === "draft" && onDeleteDraft ? (
+                      <span
+                        role="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeleteDraftTarget(d)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-100 cursor-pointer"
+                      >
+                        <Trash2 size={13} />
+                        <span>Hapus Draft</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-mute">Pendapatan</span>
+                    )}
                     <span className="num text-base font-medium">
                       {d.pendapatan != null ? rupiah(c.total) : "Belum diisi"}
                     </span>
@@ -414,6 +430,39 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd }: Props
           })}
         </ul>
       )}
+
+      <Dialog
+        open={!!deleteDraftTarget}
+        danger
+        title="Hapus draft keberangkatan?"
+        onClose={() => setDeleteDraftTarget(null)}
+        actions={
+          <>
+            <Btn variant="outline" onClick={() => setDeleteDraftTarget(null)}>
+              Batal
+            </Btn>
+            <Btn
+              variant="danger"
+              onClick={() => {
+                if (deleteDraftTarget) {
+                  onDeleteDraft?.(deleteDraftTarget.id)
+                  setDeleteDraftTarget(null)
+                }
+              }}
+            >
+              Ya, hapus draft
+            </Btn>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          Apakah Anda yakin ingin menghapus draft keberangkatan{" "}
+          <strong className="font-semibold text-slate-800">
+            {deleteDraftTarget?.jalurNama || deleteDraftTarget?.cb} ({deleteDraftTarget?.time})
+          </strong>
+          ? Tindakan ini hanya berlaku untuk draft dan tidak dapat dibatalkan.
+        </p>
+      </Dialog>
     </>
   )
 }
