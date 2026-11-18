@@ -43,21 +43,26 @@ export default function RiwayatSopir({ mine, nama, onOpen }: Props) {
       setEndDate("")
       return
     }
-    const today = new Date(TODAY)
-    const endStr = TODAY
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    const todayStr = `${year}-${month}-${day}`
 
     if (preset === "today") {
-      setStartDate(TODAY)
-      setEndDate(TODAY)
+      setStartDate(todayStr)
+      setEndDate(todayStr)
     } else if (preset === "7days") {
-      const past = new Date(today)
-      past.setDate(today.getDate() - 6)
-      setStartDate(past.toISOString().slice(0, 10))
-      setEndDate(endStr)
+      const past = new Date()
+      past.setDate(past.getDate() - 6)
+      const pYear = past.getFullYear()
+      const pMonth = String(past.getMonth() + 1).padStart(2, "0")
+      const pDay = String(past.getDate()).padStart(2, "0")
+      setStartDate(`${pYear}-${pMonth}-${pDay}`)
+      setEndDate(todayStr)
     } else if (preset === "month") {
-      const yearMonth = TODAY.slice(0, 7) // '2026-10'
-      setStartDate(`${yearMonth}-01`)
-      setEndDate(endStr)
+      setStartDate(`${year}-${month}-01`)
+      setEndDate(todayStr)
     }
   }
 

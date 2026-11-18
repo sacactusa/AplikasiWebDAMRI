@@ -26,8 +26,15 @@ export default function InputKeberangkatan({
 }: Props) {
   const isDemoDriver = currentUser?.email === "sopir@damri.co.id"
   const currentDriver = driverName || (isDemoDriver ? ME : "Sopir")
-  // Tanggal hari ini real-time (format YYYY-MM-DD, zona waktu lokal)
-  const todayReal = new Date().toISOString().slice(0, 10)
+  // Tanggal hari ini real-time (format YYYY-MM-DD sesuai zona waktu lokal perangkat/browser pengguna)
+  const getTodayLocal = () => {
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+  const todayReal = getTodayLocal()
   const [date, setDate] = useState(todayReal)
   const [time, setTime] = useState(() => {
     const now = new Date()
@@ -132,7 +139,14 @@ export default function InputKeberangkatan({
               type="date"
               value={date}
               min={todayReal}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value
+                if (val && val < todayReal) {
+                  setDate(todayReal)
+                } else {
+                  setDate(val)
+                }
+              }}
               className={inputCls()}
             />
           </Field>
