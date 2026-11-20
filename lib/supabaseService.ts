@@ -96,7 +96,7 @@ export async function getMasterData(isDemo = false): Promise<{
         rawId: s.id,
         nama: s.nama,
         kontrak: Boolean(s.kontrak),
-        nilaiTetap: s.nilai_tetap ? Number(s.nilai_tetap) : undefined,
+        nilaiTetap: s.nilai_tetap != null ? Number(s.nilai_tetap) : 0,
         aktif: Boolean(s.aktif),
       }
     })
@@ -323,6 +323,7 @@ export async function createDeparture(
   try {
     const ids = await resolveIds(d, driverEmail)
 
+    const isDikirim = d.status === "dikirim"
     const payload: Record<string, any> = {
       tanggal: d.date,
       jam: d.time.length === 5 ? `${d.time}:00` : d.time,
@@ -330,16 +331,16 @@ export async function createDeparture(
       jalur_id: ids.jalur_id,
       kendaraan_id: ids.kendaraan_id,
       sopir_id: ids.sopir_id,
-      km_tempuh: d.kmTempuh,
-      km_empty: d.kmEmpty,
-      penumpang: d.penumpang,
-      pm: d.pm,
-      pendapatan: d.pendapatan,
-      subsidi: d.subsidi,
-      bagasi: d.bagasi,
+      km_tempuh: d.kmTempuh != null ? Number(d.kmTempuh) : (isDikirim ? 0 : null),
+      km_empty: d.kmEmpty != null ? Number(d.kmEmpty) : (isDikirim ? 0 : null),
+      penumpang: d.penumpang != null ? Number(d.penumpang) : (isDikirim ? 0 : null),
+      pm: d.pm != null ? Number(d.pm) : (isDikirim ? 0 : null),
+      pendapatan: d.pendapatan != null ? Number(d.pendapatan) : (isDikirim ? 0 : null),
+      subsidi: d.subsidi != null ? Number(d.subsidi) : (isDikirim ? 0 : null),
+      bagasi: d.bagasi != null ? Number(d.bagasi) : (isDikirim ? 0 : null),
       status: d.status,
       catatan_penolakan: d.rejectNote || null,
-      dikirim_at: d.status === "dikirim" ? new Date().toISOString() : null,
+      dikirim_at: isDikirim ? new Date().toISOString() : null,
     }
 
     const { data, error } = await supabase
@@ -380,42 +381,63 @@ export async function updateDeparture(
   d: Departure,
   driverName?: string,
 ): Promise<boolean> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   try {
+    const isDikirim = d.status === "dikirim"
+
+    // Jika ID bukan UUID (misal draft lokal id "d101"), insert langsung ke Supabase
+    if (!UUID_REGEX.test(d.id)) {
+      const createRes = await createDeparture(d, d.driverEmail)
+      return createRes.success
+    }
+
     const payload: Record<string, any> = {
-      km_tempuh: d.kmTempuh,
-      km_empty: d.kmEmpty,
-      penumpang: d.penumpang,
-      pm: d.pm,
-      pendapatan: d.pendapatan,
-      subsidi: d.subsidi,
-      bagasi: d.bagasi,
+      km_tempuh: d.kmTempuh != null ? Number(d.kmTempuh) : (isDikirim ? 0 : null),
+      km_empty: d.kmEmpty != null ? Number(d.kmEmpty) : (isDikirim ? 0 : null),
+      penumpang: d.penumpang != null ? Number(d.penumpang) : (isDikirim ? 0 : null),
+      pm: d.pm != null ? Number(d.pm) : (isDikirim ? 0 : null),
+      pendapatan: d.pendapatan != null ? Number(d.pendapatan) : (isDikirim ? 0 : null),
+      subsidi: d.subsidi != null ? Number(d.subsidi) : (isDikirim ? 0 : null),
+      bagasi: d.bagasi != null ? Number(d.bagasi) : (isDikirim ? 0 : null),
       status: d.status,
       catatan_penolakan: d.rejectNote || null,
       updated_at: new Date().toISOString(),
     }
-    if (d.status === "dikirim") {
+    if (isDikirim) {
       payload.dikirim_at = new Date().toISOString()
     }
 
-    const { error } = await supabase
+    const { data: updatedRows, error } = await supabase
       .from("keberangkatan")
       .update(payload)
       .eq("id", d.id)
+      .select("id")
 
     if (error) {
-      console.error("Error update keberangkatan:", error)
-      return false
+      if (error.code === "P0001" && error.message?.includes("sudah dikirim")) {
+        return true
+      }
+      console.warn("Gagal update keberangkatan, mencoba createDeparture:", error)
+      const createRes = await createDeparture(d, d.driverEmail)
+      return createRes.success
     }
 
-    await logAudit({
-      user_nama: driverName || d.driver,
-      aksi: d.status === "dikirim" ? "Kirim" : "Ubah",
-      tabel: "keberangkatan",
-      record_id: d.id,
-      objek: `keberangkatan · ${d.id}`,
-      sebelum: {},
-      sesudah: { status: d.status, kmTempuh: d.kmTempuh, penumpang: d.penumpang },
-    })
+    if (!updatedRows || updatedRows.length === 0) {
+      const createRes = await createDeparture(d, d.driverEmail)
+      return createRes.success
+    }
+
+    try {
+      await logAudit({
+        user_nama: driverName || d.driver,
+        aksi: isDikirim ? "Kirim" : "Ubah",
+        tabel: "keberangkatan",
+        record_id: d.id,
+        objek: `keberangkatan · ${d.id}`,
+        sebelum: {},
+        sesudah: { status: d.status, kmTempuh: payload.km_tempuh, penumpang: payload.penumpang },
+      })
+    } catch {}
 
     return true
   } catch (err) {

@@ -354,7 +354,7 @@ export function Field({
   children,
   light,
 }: {
-  label: string
+  label: ReactNode
   error?: string
   hint?: string
   locked?: boolean

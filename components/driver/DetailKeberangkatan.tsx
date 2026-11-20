@@ -15,6 +15,7 @@ interface Props {
   onSave: (d: Departure) => void
   onSubmit: (d: Departure) => void
   onDeleteDraft?: (id: string) => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 
 interface TarifItem {
@@ -23,20 +24,26 @@ interface TarifItem {
   tarif: number
 }
 
-export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSubmit, onDeleteDraft }: Props) {
+export default function DetailKeberangkatan({
+  dep,
+  offline,
+  onBack,
+  onSave,
+  onSubmit,
+  onDeleteDraft,
+  currentUser,
+}: Props) {
+  const isDemoDriver = currentUser?.email === "sopir@damri.co.id"
   const [d, setD] = useState(dep)
   const [tried, setTried] = useState(false)
-  const [confirm, setConfirm] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const s = seg(d.segmentId)
   const ro = dep.status !== "draft"
 
-  // Inisialisasi awal tarif berlaku untuk jalur ini
-  const [tarifItems, setTarifItems] = useState<TarifItem[]>(() => {
-    const defaultTarif = jalur(d.jalurId)?.tarif || 0
-    return [{ id: "umum", nama: "Umum", tarif: defaultTarif }]
-  })
+  // Inisialisasi awal tarif berlaku untuk jalur ini (kosong jika belum ada di data master)
+  const [tarifItems, setTarifItems] = useState<TarifItem[]>([])
 
   // State jumlah penumpang per jenis penumpang
   const [paxCounts, setPaxCounts] = useState<Record<string, number | null>>(() => {
@@ -54,6 +61,30 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
     let active = true
 
     async function loadTarifDanPenumpang() {
+      if (isDemoDriver) {
+        const demoTarifs: Record<string, TarifItem[]> = {
+          j1: [{ id: "umum", nama: "Umum", tarif: 140000 }],
+          j2: [{ id: "umum", nama: "Umum", tarif: 150000 }],
+          j5: [{ id: "umum", nama: "Umum", tarif: 80000 }],
+        }
+        const matched = demoTarifs[d.jalurId] || []
+        if (active) {
+          setTarifItems(matched)
+          setPaxCounts((prev) => {
+            const next = { ...prev }
+            for (const it of matched) {
+              if (next[it.id] === undefined) {
+                if (it.id === "umum") next[it.id] = dep.penumpang ?? null
+                else if (it.id === "pm") next[it.id] = dep.pm ?? null
+                else next[it.id] = null
+              }
+            }
+            return next
+          })
+        }
+        return
+      }
+
       try {
         const [paxsRes, tjRes] = await Promise.all([
           supabase.from("jenis_penumpang").select("*").order("created_at"),
@@ -66,35 +97,46 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
 
         if (!active) return
 
-        const activePaxs = (paxsRes.data || []).filter((p) => p.aktif)
+        let activePaxs = (paxsRes.data || []).filter((p) => p.aktif)
+        if (paxsRes.error || activePaxs.length === 0) {
+          const p2 = await supabase.from("penumpang").select("*").order("created_at")
+          if (!p2.error && p2.data) {
+            activePaxs = p2.data.filter((p) => p.aktif !== false)
+          }
+        }
+
         const items: TarifItem[] = []
+        const seenPaxs = new Set<string>()
 
+        // HANYA tampilkan jenis penumpang yang diatur pada Data Master Tarif untuk jalur ini.
+        // Jika belum ada jenis penumpang di data master untuk jalur ini, items tetap kosong ([]).
         if (tjRes.data && tjRes.data.length > 0) {
-          const seenPaxs = new Set<string>()
-
+          const defaultUmumPax = activePaxs.find((p) => p.nama.toLowerCase().includes("umum"))
           for (const row of tjRes.data) {
-            const paxId = row.jenis_penumpang_id || "umum"
-            if (!seenPaxs.has(paxId)) {
-              seenPaxs.add(paxId)
-              const matchedPax = activePaxs.find((p) => p.id === row.jenis_penumpang_id)
-              const paxNama = matchedPax?.nama || row.jenis_penumpang || "Umum"
+            const matchedPax =
+              activePaxs.find(
+                (p) =>
+                  p.id === row.jenis_penumpang_id ||
+                  p.nama.toLowerCase() === (row.jenis_penumpang || "").toLowerCase(),
+              ) || defaultUmumPax
+            const pName = matchedPax?.nama || row.jenis_penumpang || "Umum"
+            const pId =
+              matchedPax?.id ||
+              row.jenis_penumpang_id ||
+              (pName.toLowerCase().includes("pelajar") || pName.toLowerCase().includes("p/m")
+                ? "pm"
+                : "umum")
+
+            if (!seenPaxs.has(pId) && !seenPaxs.has(pName.toLowerCase())) {
+              seenPaxs.add(pId)
+              seenPaxs.add(pName.toLowerCase())
               items.push({
-                id: paxId,
-                nama: paxNama,
+                id: pId,
+                nama: pName,
                 tarif: Number(row.tarif) || 0,
               })
             }
           }
-        }
-
-        // Jika tidak ada data spesifik di tarif_jalur, gunakan fallback tarif jalur
-        if (items.length === 0) {
-          const defaultTarif = jalur(d.jalurId)?.tarif || 0
-          items.push({
-            id: "umum",
-            nama: "Umum",
-            tarif: defaultTarif,
-          })
         }
 
         setTarifItems(items)
@@ -104,7 +146,9 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
           const next = { ...prev }
           for (const it of items) {
             if (next[it.id] === undefined) {
-              if (it.id === "umum" || it.nama.toLowerCase().includes("umum")) {
+              if (dep.passengerCounts && dep.passengerCounts[it.id] !== undefined) {
+                next[it.id] = dep.passengerCounts[it.id]
+              } else if (it.id === "umum" || it.nama.toLowerCase().includes("umum")) {
                 next[it.id] = dep.penumpang ?? null
               } else if (
                 it.id === "pm" ||
@@ -121,6 +165,7 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
         })
       } catch (err) {
         console.warn("Gagal memuat tarif_jalur dari Supabase:", err)
+        setTarifItems([])
       }
     }
 
@@ -128,16 +173,16 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
     return () => {
       active = false
     }
-  }, [d.jalurId, d.segmentId, dep.penumpang, dep.pm])
+  }, [d.jalurId, dep.passengerCounts, dep.penumpang, dep.pm, isDemoDriver])
 
-  // Hitung total pendapatan
+  // Hitung total pendapatan (jalur/segmen yang belum ada tarifnya di data master bernilai 0)
   const totalPaxRevenue = tarifItems.reduce((acc, it) => {
-    const count = paxCounts[it.id] ?? 0
-    return acc + count * it.tarif
+    const count = Number(paxCounts[it.id]) || 0
+    return acc + count * (it.tarif || 0)
   }, 0)
 
+  // Nilai tetap kontrak: jika belum ada di data master nilainya 0
   const revenueFromPassengers = s.kontrak ? (s.nilaiTetap || 0) : totalPaxRevenue
-  const totalRevenue = revenueFromPassengers + (d.subsidi ?? 0) + (d.bagasi ?? 0)
 
   const handlePaxCountChange = (id: string, val: number | null) => {
     setPaxCounts((prev) => ({ ...prev, [id]: val }))
@@ -165,50 +210,49 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
   const set = (k: keyof Departure) => (v: number | null) =>
     setD((p) => ({ ...p, [k]: v }))
 
-  // Cek apakah ada field wajib yang belum diisi
-  const isKmTempuhMissing = d.kmTempuh == null
-  const isKmEmptyMissing = d.kmEmpty == null
-  const isPaxMissing =
-    tarifItems.length > 0
-      ? tarifItems.some((it) => paxCounts[it.id] == null)
-      : d.penumpang == null
-
-  const hasErrors = isKmTempuhMissing || isKmEmptyMissing || isPaxMissing
+  // Cek apakah ada field wajib yang belum diisi (hanya KM tempuh yang wajib > 0)
+  const isKmTempuhMissing = d.kmTempuh == null || Number(d.kmTempuh) <= 0
+  const hasErrors = isKmTempuhMissing
 
   const prepare = (status?: Departure["status"]): Departure => {
-    let umumCount = d.penumpang
-    let pmCount = d.pm
+    let umumCount = 0
+    let pmCount = 0
+    const finalPaxCounts: Record<string, number> = {}
 
     for (const it of tarifItems) {
-      const val = paxCounts[it.id]
+      const val = Number(paxCounts[it.id]) || 0
+      finalPaxCounts[it.id] = val
       if (it.id === "umum" || it.nama.toLowerCase().includes("umum")) {
-        if (val != null) umumCount = val
+        umumCount = val
       } else if (
         it.id === "pm" ||
         it.nama.toLowerCase().includes("pelajar") ||
         it.nama.toLowerCase().includes("p/m")
       ) {
-        if (val != null) pmCount = val
+        pmCount = val
       }
     }
 
-    if (tarifItems.length === 1 && pmCount == null) {
-      pmCount = 0
+    if (tarifItems.length === 0) {
+      umumCount = d.penumpang ?? 0
+      pmCount = d.pm ?? 0
     }
 
     return {
       ...d,
+      kmTempuh: d.kmTempuh != null ? Number(d.kmTempuh) : 0,
+      kmEmpty: d.kmEmpty != null ? Number(d.kmEmpty) : 0,
       penumpang: umumCount,
       pm: pmCount,
-      pendapatan: revenueFromPassengers,
-      subsidi: d.subsidi ?? 0,
-      bagasi: d.bagasi ?? 0,
-      passengerCounts: paxCounts as Record<string, number>,
+      pendapatan: revenueFromPassengers ?? 0,
+      subsidi: d.subsidi != null ? Number(d.subsidi) : 0,
+      bagasi: d.bagasi != null ? Number(d.bagasi) : 0,
+      passengerCounts: finalPaxCounts,
       ...(status ? { status, rejectNote: undefined } : {}),
     }
   }
 
-  const send = () => {
+  const send = async () => {
     setTried(true)
     if (hasErrors) {
       setTimeout(
@@ -220,7 +264,12 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
       )
       return
     }
-    setConfirm(true)
+    setSubmitting(true)
+    try {
+      await onSubmit(prepare("dikirim"))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const num = (
@@ -229,12 +278,10 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
     o: { money?: boolean; suffix?: string; locked?: boolean } = {},
   ) => {
     const isFieldMissing =
-      tried &&
-      ((k === "kmTempuh" && isKmTempuhMissing) ||
-        (k === "kmEmpty" && isKmEmptyMissing))
+      tried && k === "kmTempuh" && isKmTempuhMissing
 
     return (
-      <Field label={label} error={isFieldMissing ? "Wajib diisi" : undefined} locked={o.locked}>
+      <Field label={label} error={isFieldMissing ? "Wajib diisi (> 0 km)" : undefined} locked={o.locked}>
         <NumInput
           value={d[k] as number | null}
           onChange={set(k)}
@@ -308,7 +355,6 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
             {tarifItems.length > 0 ? (
               tarifItems.map((item) => {
                 const val = paxCounts[item.id]
-                const isErr = tried && val == null
                 const labelText = item.nama.toLowerCase().startsWith("penumpang")
                   ? item.nama
                   : `Penumpang ${item.nama}`
@@ -316,35 +362,30 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
                 return (
                   <Field
                     key={item.id}
-                    label={labelText}
-                    error={isErr ? "Wajib diisi" : undefined}
+                    label={
+                      <div className="flex items-center justify-between">
+                        <span>{labelText}</span>
+                        <span className="text-xs font-normal text-mute">
+                          Tarif: {rupiah(item.tarif || 0)}
+                        </span>
+                      </div>
+                    }
                   >
                     <NumInput
                       value={val ?? null}
                       onChange={(v) => handlePaxCountChange(item.id, v)}
                       suffix="orang"
-                      error={isErr}
                       disabled={ro}
                     />
                   </Field>
                 )
               })
             ) : (
-              <Field
-                label="Penumpang Umum"
-                error={tried && d.penumpang == null ? "Wajib diisi" : undefined}
-              >
-                <NumInput
-                  value={d.penumpang}
-                  onChange={(v) => {
-                    set("penumpang")(v)
-                    handlePaxCountChange("umum", v)
-                  }}
-                  suffix="orang"
-                  error={tried && d.penumpang == null}
-                  disabled={ro}
-                />
-              </Field>
+              <div className="rounded-xl border border-dashed border-line bg-wash/60 p-4 text-center">
+                <p className="text-xs font-medium text-mute">
+                  Belum ada jenis penumpang yang diatur untuk jalur ini pada Data Master Tarif.
+                </p>
+              </div>
             )}
           </>,
         )}
@@ -358,59 +399,32 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
           </>,
         )}
 
-        {/* 4 · Jumlah Pendapatan (Tanpa UPP, Tarif Berlaku per Jenis Penumpang + Total Pendapatan) */}
-        <section className="rounded-xl bg-ink p-4 text-white">
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/60">
-            4 · Jumlah Pendapatan
-          </h2>
-          <div className="space-y-3">
-            {/* Tarif berlaku */}
-            <div className="border-b border-white/10 pb-3">
-              <span className="text-sm font-medium text-white/70">
-                Tarif berlaku
-              </span>
-              <div className="mt-2 space-y-1.5 pl-1">
-                {s.kontrak ? (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-white/80">Nilai tetap (Kontrak)</span>
-                    <span className="num font-semibold text-white">
-                      {rupiah(s.nilaiTetap)}
-                    </span>
-                  </div>
-                ) : tarifItems.length > 0 ? (
-                  tarifItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="text-white/80">{item.nama}</span>
-                      <span className="num font-semibold text-white">
-                        {rupiah(item.tarif)}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-white/80">Umum</span>
-                    <span className="num font-semibold text-white">
-                      {rupiah(jalur(d.jalurId)?.tarif || 0)}
-                    </span>
-                  </div>
-                )}
+        {/* 4 · Total Pendapatan */}
+        {card(
+          "4 · Total Pendapatan",
+          <>
+            <div className="space-y-2.5 text-sm">
+              <div className="flex justify-between items-center py-1 border-b border-line/50">
+                <span className="text-mute">Pendapatan tiket</span>
+                <span className="num font-semibold text-ink">{rupiah(revenueFromPassengers)}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-line/50">
+                <span className="text-mute">Subsidi</span>
+                <span className="num font-semibold text-ink">{rupiah(d.subsidi ?? 0)}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-line/50">
+                <span className="text-mute">Bagasi</span>
+                <span className="num font-semibold text-ink">{rupiah(d.bagasi ?? 0)}</span>
+              </div>
+              <div className="flex justify-between items-baseline pt-2">
+                <span className="text-sm font-bold text-ink">Total pendapatan</span>
+                <span className="num text-xl font-bold text-navy">
+                  {rupiah((revenueFromPassengers || 0) + (d.subsidi ?? 0) + (d.bagasi ?? 0))}
+                </span>
               </div>
             </div>
-
-            {/* Total pendapatan */}
-            <div className="flex items-baseline justify-between pt-1">
-              <span className="text-sm font-semibold text-white/90">
-                Total pendapatan
-              </span>
-              <span className="num text-xl font-bold text-emerald-400">
-                {rupiah(totalRevenue)}
-              </span>
-            </div>
-          </div>
-        </section>
+          </>,
+        )}
 
         {!ro && (
           <div className="space-y-3 pt-2">
@@ -419,8 +433,8 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
                 Tidak ada koneksi — simpan dan kirim dinonaktifkan.
               </p>
             )}
-            <Btn className="h-12 w-full" disabled={offline} onClick={send}>
-              {dep.rejectNote ? "Perbaiki dan kirim ulang" : "Kirim"}
+            <Btn className="h-12 w-full" disabled={offline || submitting} onClick={send}>
+              {submitting ? "Mengirim ke koordinator..." : dep.rejectNote ? "Perbaiki dan kirim ulang" : "Kirim"}
               <ChevronRight size={18} />
             </Btn>
             {tried && hasErrors && (
@@ -431,7 +445,7 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
             <Btn
               variant="outline"
               className="h-12 w-full"
-              disabled={offline}
+              disabled={offline || submitting}
               onClick={() => onSave(prepare())}
             >
               Simpan Draft
@@ -439,8 +453,9 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
             {d.status === "draft" && onDeleteDraft && (
               <button
                 type="button"
+                disabled={submitting}
                 onClick={() => setConfirmDelete(true)}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50/70 text-xs font-semibold text-red-600 transition hover:bg-red-100 active:scale-98 cursor-pointer"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50/70 text-xs font-semibold text-red-600 transition hover:bg-red-100 active:scale-98 cursor-pointer disabled:opacity-50"
               >
                 <Trash2 size={15} />
                 <span>Hapus Draft</span>
@@ -475,24 +490,6 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
         <p className="text-sm text-ink">
           Apakah Anda yakin ingin menghapus draft keberangkatan ini? Tindakan ini hanya berlaku untuk status draft dan tidak dapat dibatalkan.
         </p>
-      </Dialog>
-
-      <Dialog
-        open={confirm}
-        title="Kirim keberangkatan?"
-        onClose={() => setConfirm(false)}
-        actions={
-          <>
-            <Btn variant="outline" onClick={() => setConfirm(false)}>
-              Batal
-            </Btn>
-            <Btn onClick={() => onSubmit(prepare("dikirim"))}>
-              Ya, kirim
-            </Btn>
-          </>
-        }
-      >
-        Setelah dikirim, data tidak dapat diubah sampai diverifikasi.
       </Dialog>
     </>
   )

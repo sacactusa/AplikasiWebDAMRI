@@ -1636,7 +1636,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                     }
                     return filteredJals.map((j) => (
                       <option key={j.id} value={j.id}>
-                        {j.nama} {j.tarif ? `(Saat ini: ${rupiah(j.tarif)})` : `(Belum ada tarif)`}
+                        {j.nama} {j.tarif ? `(Saat ini: ${rupiah(j.tarif)})` : `(Saat ini: Rp 0 / Belum ada tarif)`}
                       </option>
                     ))
                   })()}

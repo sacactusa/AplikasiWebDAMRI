@@ -231,7 +231,11 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
         <div className="rounded-xl border border-line">
           <Empty
             title="Tidak ada yang menunggu verifikasi"
-            hint="Semua keberangkatan sudah diperiksa."
+            hint={
+              deps.some((d) => d.status === "draft")
+                ? "Semua keberangkatan yang telah dikirim sudah diverifikasi. Terdapat keberangkatan yang masih berstatus Draft pada sopir (belum diklik 'Kirim')."
+                : "Semua keberangkatan sudah diperiksa."
+            }
             action={<Btn onClick={() => go("dashboard")}>Buka Dashboard</Btn>}
           />
         </div>
@@ -293,14 +297,12 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
                   return (d.penumpang || 0) + (d.pm || 0)
                 })()
 
-                // Hitung total pendapatan sesuai perhitungan sopir
+                // Hitung total pendapatan sesuai perhitungan sopir & data master
                 let paxRev = d.pendapatan
-                if (paxRev == null) {
-                  if (segmentObj.kontrak) {
-                    paxRev = segmentObj.nilaiTetap || 0
-                  } else {
-                    paxRev = (d.penumpang || 0) * (jalurObj.tarif || 0)
-                  }
+                if (segmentObj.kontrak) {
+                  paxRev = segmentObj.nilaiTetap || 0
+                } else if (paxRev == null) {
+                  paxRev = (d.penumpang || 0) * (jalurObj.tarif || 0)
                 }
                 const totalRevenue =
                   (paxRev || 0) + (d.subsidi || 0) + (d.bagasi || 0)
@@ -433,6 +435,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
             segments={segments}
             jalurList={jalurList}
             passengerTypes={passengerTypes}
+            isDemo={isDemo}
           />
         )}
       </Drawer>
@@ -495,11 +498,13 @@ function DetailBody({
   segments,
   jalurList,
   passengerTypes,
+  isDemo,
 }: {
   d: Departure
   segments: Segment[]
   jalurList: Jalur[]
   passengerTypes: JenisPenumpang[]
+  isDemo?: boolean
 }) {
   const segmentObj =
     segments.find(
@@ -519,6 +524,16 @@ function DetailBody({
     let active = true
 
     async function loadTarifDanPenumpang() {
+      if (isDemo) {
+        const demoTarifs: Record<string, Array<{ id: string; nama: string; tarif: number }>> = {
+          j1: [{ id: "umum", nama: "Umum", tarif: 140000 }],
+          j2: [{ id: "umum", nama: "Umum", tarif: 150000 }],
+          j5: [{ id: "umum", nama: "Umum", tarif: 80000 }],
+        }
+        setTarifItems(demoTarifs[d.jalurId] || [])
+        return
+      }
+
       try {
         const [paxsRes, tjRes] = await Promise.all([
           supabase.from("jenis_penumpang").select("*").order("created_at"),
@@ -531,56 +546,50 @@ function DetailBody({
 
         if (!active) return
 
-        const activePaxs = (paxsRes.data || []).filter((p: any) => p.aktif)
+        let activePaxs = (paxsRes.data || []).filter((p: any) => p.aktif)
+        if (paxsRes.error || activePaxs.length === 0) {
+          const p2 = await supabase.from("penumpang").select("*").order("created_at")
+          if (!p2.error && p2.data) {
+            activePaxs = p2.data.filter((p: any) => p.aktif !== false)
+          }
+        }
+        if (activePaxs.length === 0) {
+          activePaxs = (passengerTypes && passengerTypes.length > 0)
+            ? passengerTypes.filter((p) => p.aktif)
+            : [
+                { id: "umum", nama: "Umum", aktif: true },
+                { id: "pm", nama: "Pelajar / Mahasiswa (P/M)", aktif: true },
+              ]
+        }
+
         const items: Array<{ id: string; nama: string; tarif: number }> = []
+        const seenPaxs = new Set<string>()
 
+        // HANYA ambil jenis penumpang yang benar-benar diatur di Data Master Tarif untuk jalur ini
         if (tjRes.data && tjRes.data.length > 0) {
-          const seenPaxs = new Set<string>()
+          const defaultUmumPax = activePaxs.find((p: any) => p.nama?.toLowerCase().includes("umum"))
           for (const row of tjRes.data) {
-            const paxId = row.jenis_penumpang_id || "umum"
-            if (!seenPaxs.has(paxId)) {
-              seenPaxs.add(paxId)
-              const matchedPax = activePaxs.find(
-                (p: any) => p.id === row.jenis_penumpang_id,
-              )
-              const paxNama = matchedPax?.nama || row.jenis_penumpang || "Umum"
+            const matchedPax =
+              activePaxs.find(
+                (p: any) =>
+                  p.id === row.jenis_penumpang_id ||
+                  p.nama?.toLowerCase() === (row.jenis_penumpang || "").toLowerCase(),
+              ) || defaultUmumPax
+            const pName = matchedPax?.nama || row.jenis_penumpang || "Umum"
+            const pId =
+              matchedPax?.id ||
+              row.jenis_penumpang_id ||
+              (pName.toLowerCase().includes("pelajar") || pName.toLowerCase().includes("p/m")
+                ? "pm"
+                : "umum")
+
+            if (!seenPaxs.has(pId) && !seenPaxs.has(pName.toLowerCase())) {
+              seenPaxs.add(pId)
+              seenPaxs.add(pName.toLowerCase())
               items.push({
-                id: paxId,
-                nama: paxNama,
+                id: pId,
+                nama: pName,
                 tarif: Number(row.tarif) || 0,
-              })
-            }
-          }
-        }
-
-        // Jika tidak ada data spesifik di tarif_jalur, gunakan fallback tarif jalur
-        if (items.length === 0) {
-          const defaultTarif = jalurObj?.tarif || 0
-          items.push({
-            id: "umum",
-            nama: "Umum",
-            tarif: defaultTarif,
-          })
-          if (d.pm != null && d.pm > 0) {
-            items.push({
-              id: "pm",
-              nama: "Pelajar / Mahasiswa (P/M)",
-              tarif: Math.round(defaultTarif * 0.7),
-            })
-          }
-        }
-
-        // Jika ada passengerCounts dari sopir yang belum tercantum, tambahkan agar tidak hilang
-        if (d.passengerCounts) {
-          for (const k of Object.keys(d.passengerCounts)) {
-            if (!items.some((it) => it.id === k)) {
-              const matched =
-                activePaxs.find((p: any) => p.id === k) ||
-                passengerTypes.find((p) => p.id === k)
-              items.push({
-                id: k,
-                nama: matched?.nama || k,
-                tarif: 0,
               })
             }
           }
@@ -589,16 +598,7 @@ function DetailBody({
         setTarifItems(items)
       } catch (e) {
         console.warn("Gagal memuat tarif:", e)
-        const defaultTarif = jalurObj?.tarif || 0
-        const items = [{ id: "umum", nama: "Umum", tarif: defaultTarif }]
-        if (d.pm != null && d.pm > 0) {
-          items.push({
-            id: "pm",
-            nama: "Pelajar / Mahasiswa (P/M)",
-            tarif: Math.round(defaultTarif * 0.7),
-          })
-        }
-        setTarifItems(items)
+        setTarifItems([])
       }
     }
 
@@ -606,23 +606,20 @@ function DetailBody({
     return () => {
       active = false
     }
-  }, [d.jalurId, d.passengerCounts, d.pm, jalurObj?.tarif, passengerTypes])
+  }, [d.jalurId, isDemo, passengerTypes])
 
   const getCount = (it: { id: string; nama: string }) => {
     if (d.passengerCounts && d.passengerCounts[it.id] !== undefined) {
-      return d.passengerCounts[it.id]
+      return Number(d.passengerCounts[it.id]) || 0
     }
-    if (it.id === "umum" || it.nama.toLowerCase().includes("umum")) {
-      return d.penumpang
-    }
-    if (
+    const isPm =
       it.id === "pm" ||
       it.nama.toLowerCase().includes("pelajar") ||
       it.nama.toLowerCase().includes("p/m")
-    ) {
-      return d.pm
-    }
-    return null
+    const isUmum = it.id === "umum" || it.nama.toLowerCase().includes("umum")
+    if (isUmum) return d.penumpang != null ? Number(d.penumpang) : 0
+    if (isPm) return d.pm != null ? Number(d.pm) : 0
+    return 0
   }
 
   const totalPax = (() => {
@@ -636,13 +633,19 @@ function DetailBody({
     return (d.penumpang || 0) + (d.pm || 0)
   })()
 
-  // Hitung pendapatan tiket penumpang sesuai nilai input sopir
-  const paxRevenue = segmentObj.kontrak
-    ? segmentObj.nilaiTetap || 0
-    : d.pendapatan != null
-      ? d.pendapatan
-      : tarifItems.reduce((acc, it) => acc + (getCount(it) || 0) * it.tarif, 0)
+  // Perhitungan pendapatan tiket penumpang:
+  // 1. Jika segmen kontrak: pendapatan tiket = nilai tetap kontrak (atau 0 jika belum diset)
+  // 2. Jika bukan kontrak dan ada jenis penumpang di data master untuk jalur ini:
+  //    hitung langsung dari rumus: sum(jumlah_penumpang * tarif)
+  // 3. Jika belum diatur di data master (tarifItems kosong):
+  //    gunakan nilai d.pendapatan yang dikirim sopir (atau 0)
+  const calculatedPaxRev = segmentObj.kontrak
+    ? (segmentObj.nilaiTetap || 0)
+    : tarifItems.length > 0
+      ? tarifItems.reduce((acc, it) => acc + getCount(it) * (it.tarif || 0), 0)
+      : (d.pendapatan || 0)
 
+  const paxRevenue = calculatedPaxRev
   const totalRevenue = paxRevenue + (d.subsidi || 0) + (d.bagasi || 0)
 
   return (
@@ -699,7 +702,7 @@ function DetailBody({
         </div>
       </div>
 
-      {/* 2 · Penumpang (Dinamis sesuai jenis penumpang yang diinput sopir) */}
+      {/* 2 · Penumpang */}
       <div className="rounded-xl border border-line p-4">
         <div className="mb-2.5 flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-wider text-mute">
@@ -715,38 +718,50 @@ function DetailBody({
           {tarifItems.length > 0 ? (
             tarifItems.map((item) => {
               const count = getCount(item)
+              const subtotal = count * (item.tarif || 0)
               const labelText = item.nama.toLowerCase().startsWith("penumpang")
                 ? item.nama
                 : `Penumpang ${item.nama}`
               return (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between border-b border-line/50 pb-2 last:border-0 last:pb-0"
+                  className="flex items-center justify-between border-b border-line/50 pb-2.5 last:border-0 last:pb-0"
                 >
                   <div>
-                    <span className="text-mute">{labelText}</span>
-                    {!segmentObj.kontrak && item.tarif > 0 && (
-                      <span className="ml-2 text-xs text-mute/80">
-                        ({rupiah(item.tarif)})
-                      </span>
+                    <p className="font-medium text-ink">{labelText}</p>
+                    {!segmentObj.kontrak && (
+                      <p className="text-xs text-mute">
+                        {nf(count)} orang × {rupiah(item.tarif)}
+                      </p>
                     )}
                   </div>
-                  <span className="num font-medium text-ink">
-                    {count != null ? `${nf(count)} orang` : "–"}
-                  </span>
+                  <div className="text-right">
+                    <p className="num font-semibold text-ink">
+                      {segmentObj.kontrak ? `${nf(count)} orang` : rupiah(subtotal)}
+                    </p>
+                    {!segmentObj.kontrak && (
+                      <p className="text-xs text-mute">{nf(count)} orang</p>
+                    )}
+                  </div>
                 </div>
               )
             })
           ) : (
-            <div className="flex justify-between text-sm">
-              <span className="text-mute">Penumpang Umum</span>
-              <span className="num font-medium">{nf(d.penumpang)} orang</span>
+            <div className="rounded-lg border border-dashed border-line bg-wash/60 p-3.5 text-center text-xs text-mute">
+              {d.penumpang != null && d.penumpang > 0 ? (
+                <div className="flex justify-between text-sm text-ink">
+                  <span className="text-mute">Penumpang</span>
+                  <span className="num font-medium">{nf(d.penumpang)} orang</span>
+                </div>
+              ) : (
+                "Belum ada jenis penumpang yang diatur untuk jalur ini pada Data Master Tarif."
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* 3 · Pendapatan (Biaya Tambahan) */}
+      {/* 3 · Pendapatan & Biaya Tambahan */}
       <div className="rounded-xl border border-line p-4">
         <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-mute">
           3 · Pendapatan & Biaya Tambahan
@@ -771,16 +786,16 @@ function DetailBody({
         </div>
       </div>
 
-      {/* 4 · Jumlah Pendapatan (Sesuai tampilan 4 · Jumlah Pendapatan Sopir) */}
+      {/* 4 · Jumlah Pendapatan */}
       <div className="rounded-xl bg-ink p-4 text-white">
         <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/60">
           4 · Jumlah Pendapatan
         </h3>
         <div className="space-y-3">
-          {/* Tarif berlaku */}
+          {/* Rincian Perhitungan */}
           <div className="border-b border-white/10 pb-3">
-            <span className="text-sm font-medium text-white/70">
-              Tarif berlaku
+            <span className="text-xs font-medium uppercase tracking-wider text-white/70">
+              Rincian Perhitungan
             </span>
             <div className="mt-2 space-y-1.5 pl-1">
               {segmentObj.kontrak ? (
@@ -791,22 +806,44 @@ function DetailBody({
                   </span>
                 </div>
               ) : tarifItems.length > 0 ? (
-                tarifItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="text-white/80">{item.nama}</span>
-                    <span className="num font-semibold text-white">
-                      {rupiah(item.tarif)}
-                    </span>
-                  </div>
-                ))
+                tarifItems.map((item) => {
+                  const count = getCount(item)
+                  const subtotal = count * (item.tarif || 0)
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span className="text-white/80">
+                        {item.nama} ({nf(count)} × {rupiah(item.tarif)})
+                      </span>
+                      <span className="num font-semibold text-white">
+                        {rupiah(subtotal)}
+                      </span>
+                    </div>
+                  )
+                })
               ) : (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/80">Umum</span>
+                  <span className="text-white/80">Pendapatan tiket</span>
                   <span className="num font-semibold text-white">
-                    {rupiah(jalurObj?.tarif || 0)}
+                    {rupiah(paxRevenue)}
+                  </span>
+                </div>
+              )}
+              {d.subsidi != null && d.subsidi > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/80">Subsidi</span>
+                  <span className="num font-semibold text-white">
+                    {rupiah(d.subsidi)}
+                  </span>
+                </div>
+              )}
+              {d.bagasi != null && d.bagasi > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/80">Bagasi</span>
+                  <span className="num font-semibold text-white">
+                    {rupiah(d.bagasi)}
                   </span>
                 </div>
               )}

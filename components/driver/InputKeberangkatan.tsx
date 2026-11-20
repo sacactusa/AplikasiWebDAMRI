@@ -11,7 +11,7 @@ interface Props {
   deps: Departure[]
   offline: boolean
   onCancel: () => void
-  onSave: (d: Departure) => void
+  onSave: (d: Departure) => void | Promise<void>
   driverName?: string
   currentUser?: { nama: string; email: string; id?: string } | null
 }
@@ -49,6 +49,7 @@ export default function InputKeberangkatan({
   const [veh, setVeh] = useState("")
   const [dup, setDup] = useState(false)
   const [tried, setTried] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   // Ambil data master terkini dari Supabase
   useEffect(() => {
@@ -68,11 +69,20 @@ export default function InputKeberangkatan({
   }, [isDemoDriver])
 
   const jalurOpts = useMemo(() => {
-    const filtered = jalurList.filter(
-      (j) => (j.segmentId === segmentId || (j as any).segmen_id === segmentId) && j.aktif,
-    )
+    const segObj = segments.find((s) => s.id === segmentId || s.rawId === segmentId)
+    const filtered = jalurList.filter((j) => {
+      if (!j.aktif) return false
+      return (
+        j.segmentId === segmentId ||
+        (j as any).segmen_id === segmentId ||
+        (segObj &&
+          (j.segmentId === segObj.rawId ||
+            (j as any).segmen_id === segObj.rawId ||
+            j.segmentId === segObj.id))
+      )
+    })
     return filtered.length > 0 ? filtered : jalurList.filter((j) => j.aktif)
-  }, [jalurList, segmentId])
+  }, [jalurList, segmentId, segments])
 
   useEffect(() => {
     if (jalurOpts.length > 0 && !jalurOpts.some((j) => j.id === jalurId)) {
@@ -121,16 +131,25 @@ export default function InputKeberangkatan({
     }
   }
 
-  const submit = () => {
+  const submit = async () => {
     setTried(true)
     if (!selectedPlat || !date || !time) return
+    if (date < todayReal) {
+      setDate(todayReal)
+      return
+    }
     const vehId = matchedVeh?.plat || matchedVeh?.cb || selectedPlat
     if (
       deps.some((d) => (d.cb === vehId || d.cb === selectedPlat) && d.time === time && d.jalurId === jalurId && d.date === date)
     ) {
       return setDup(true)
     }
-    onSave(make())
+    setSubmitting(true)
+    try {
+      await onSave(make())
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -141,15 +160,27 @@ export default function InputKeberangkatan({
           <input value={currentDriver} disabled className={inputCls()} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Tanggal">
+          <Field
+            label="Tanggal"
+            hint="Hari ini & seterusnya"
+            error={tried && date < todayReal ? "Tanggal tidak boleh kemarin" : undefined}
+          >
             <input
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className={inputCls()}
+              min={todayReal}
+              onChange={(e) => {
+                const val = e.target.value
+                if (val && val < todayReal) {
+                  setDate(todayReal)
+                } else {
+                  setDate(val)
+                }
+              }}
+              className={inputCls(tried && date < todayReal)}
             />
           </Field>
-          <Field label="Jam berangkat">
+          <Field label="Jam berangkat" hint="Bebas dipilih">
             <input
               type="time"
               value={time}
@@ -214,30 +245,36 @@ export default function InputKeberangkatan({
           </select>
         </Field>
         <div className="flex gap-3 pt-2">
-          <Btn variant="outline" className="flex-1" onClick={onCancel}>
+          <Btn variant="outline" className="flex-1" disabled={submitting} onClick={onCancel}>
             Batal
           </Btn>
-          <Btn className="h-12 flex-[2]" disabled={offline} onClick={submit}>
-            Simpan
+          <Btn className="h-12 flex-[2]" disabled={offline || submitting} onClick={submit}>
+            {submitting ? "Menyimpan..." : "Lanjut ke Isi Hasil →"}
           </Btn>
         </div>
       </div>
       <Dialog
         open={dup}
         title="Data serupa sudah ada"
-        onClose={() => setDup(false)}
+        onClose={() => !submitting && setDup(false)}
         actions={
           <>
-            <Btn variant="outline" onClick={() => setDup(false)}>
+            <Btn variant="outline" disabled={submitting} onClick={() => setDup(false)}>
               Periksa
             </Btn>
             <Btn
-              onClick={() => {
+              disabled={submitting}
+              onClick={async () => {
                 setDup(false)
-                onSave(make())
+                setSubmitting(true)
+                try {
+                  await onSave(make())
+                } finally {
+                  setSubmitting(false)
+                }
               }}
             >
-              Tetap simpan
+              {submitting ? "Menyimpan..." : "Tetap simpan"}
             </Btn>
           </>
         }

@@ -23,29 +23,29 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
   const [segments, setSegments] = useState<Segment[]>(isDemo ? SEGMENTS : [])
   const [jalurList, setJalurList] = useState<Jalur[]>(isDemo ? JALUR : [])
 
-  // Cari tanggal keberangkatan disetujui terbaru
-  const latestApprovedDate = useMemo(() => {
-    const approvedDates = deps
-      .filter((d) => d.status === "disetujui")
+  // Cari tanggal keberangkatan terbaru (disetujui atau dikirim)
+  const latestDataDate = useMemo(() => {
+    const validDates = deps
+      .filter((d) => d.status === "disetujui" || d.status === "dikirim")
       .map((d) => d.date)
       .sort((a, b) => b.localeCompare(a))
-    return approvedDates[0] || null
+    return validDates[0] || null
   }, [deps])
 
-  // Sinkronisasi otomatis ke tanggal data disetujui terbaru jika pada tanggal hari ini belum ada data
+  // Sinkronisasi otomatis ke tanggal data terbaru jika pada tanggal hari ini belum ada data
   const hasAutoAdjusted = useRef(false)
   useEffect(() => {
-    if (!hasAutoAdjusted.current && latestApprovedDate) {
+    if (!hasAutoAdjusted.current && latestDataDate) {
       const currentAnchorHasData = deps.some(
-        (d) => d.status === "disetujui" && d.date === r.anchor,
+        (d) => (d.status === "disetujui" || d.status === "dikirim") && d.date === r.anchor,
       )
       if (!currentAnchorHasData) {
-        r.setAnchor(latestApprovedDate)
-        r.setTo(latestApprovedDate)
+        r.setAnchor(latestDataDate)
+        r.setTo(latestDataDate)
       }
       hasAutoAdjusted.current = true
     }
-  }, [latestApprovedDate, deps, r])
+  }, [latestDataDate, deps, r])
 
   useEffect(() => {
     getMasterData(isDemo).then((m) => {
@@ -55,7 +55,9 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
   }, [isDemo])
   const approved = deps.filter(
     (d) =>
-      d.status === "disetujui" && d.date >= r.range[0] && d.date <= r.range[1],
+      (d.status === "disetujui" || d.status === "dikirim") &&
+      d.date >= r.range[0] &&
+      d.date <= r.range[1],
   )
   const t = agg(approved)
   const download = async () => {
@@ -95,29 +97,29 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
           <Empty
             title={
               r.mode === "harian"
-                ? `Tidak ada data disetujui pada ${fmtDate(r.anchor)}`
-                : "Tidak ada data disetujui pada periode ini"
+                ? `Tidak ada data operasional pada ${fmtDate(r.anchor)}`
+                : "Tidak ada data operasional pada periode ini"
             }
             hint={
-              latestApprovedDate ? (
+              latestDataDate ? (
                 <span>
-                  Keberangkatan terakhir yang disetujui ada pada tanggal{" "}
-                  <strong className="font-semibold text-ink">{fmtDate(latestApprovedDate)}</strong>.
+                  Keberangkatan terakhir ada pada tanggal{" "}
+                  <strong className="font-semibold text-ink">{fmtDate(latestDataDate)}</strong>.
                 </span>
               ) : (
-                "Silakan pilih periode atau tanggal yang memiliki data disetujui."
+                "Silakan pilih periode atau tanggal yang memiliki data keberangkatan."
               )
             }
             action={
-              latestApprovedDate && latestApprovedDate !== r.anchor ? (
+              latestDataDate && latestDataDate !== r.anchor ? (
                 <Btn
                   variant="outline"
                   onClick={() => {
-                    r.setAnchor(latestApprovedDate)
+                    r.setAnchor(latestDataDate)
                     r.setMode("harian")
                   }}
                 >
-                  Lihat data {fmtDate(latestApprovedDate)}
+                  Lihat data {fmtDate(latestDataDate)}
                 </Btn>
               ) : undefined
             }

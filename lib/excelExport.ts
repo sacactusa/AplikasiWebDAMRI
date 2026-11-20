@@ -1,7 +1,6 @@
-import * as XLSX from "xlsx"
 import type { Departure, Jalur, Segment } from "./data"
 import { JALUR, SEGMENTS } from "./data"
-import { populateDamriTemplate } from "./excelTemplatePopulator"
+import { createDamriExcelWorkbook } from "./excelTemplatePopulator"
 
 /**
  * Memicu unduhan file Excel (.xlsx) langsung di browser pengguna
@@ -19,8 +18,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 
 /**
  * Ekspor Laporan Operasional Produksi AK 15 ke format Excel (.xlsx)
- * Susunan baris dan kolom 100% mengikuti template 'template laporan excel.xlsx'.
- * Baris/kolom yang tidak memiliki data dikosongkan.
+ * Segmen dan Jalur menyesuaikan Data Master dengan ALL BORDERS rapi.
  */
 export async function exportLaporanAK15(
   deps: Departure[],
@@ -29,7 +27,7 @@ export async function exportLaporanAK15(
   segments: Segment[] = SEGMENTS,
   jalurList: Jalur[] = JALUR,
 ) {
-  const fileName = `AK15_${startDate || "awal"}_${endDate || "akhir"}.xlsx`
+  const fileName = `Laporan_Pendapatan_${startDate || "awal"}_${endDate || "akhir"}.xlsx`
 
   try {
     // 1. Coba lewat API endpoint server (lebih cepat & ringan bagi memori browser)
@@ -51,23 +49,14 @@ export async function exportLaporanAK15(
       return
     }
   } catch (apiErr) {
-    console.warn("Gagal via /api/export-excel, menggunakan fallback client-side:", apiErr)
+    console.warn("Gagal via /api/export-excel, menggunakan fallback client-side ExcelJS:", apiErr)
   }
 
-  // 2. Fallback: Ambil file template statis dari public/ dan proses di client-side
+  // 2. Fallback: Buat langsung via ExcelJS di client-side dengan ALL BORDERS
   try {
-    const resTemplate = await fetch("/template_laporan_excel.xlsx")
-    if (!resTemplate.ok) {
-      throw new Error("Berkas template laporan excel tidak dapat dimuat")
-    }
-
-    const arrayBuffer = await resTemplate.arrayBuffer()
-    const wb = XLSX.read(arrayBuffer, { cellFormula: true })
-
-    const outWb = populateDamriTemplate(wb, deps, startDate, endDate, segments, jalurList)
-
-    const outBuf = XLSX.write(outWb, { type: "array", bookType: "xlsx" })
-    const blob = new Blob([outBuf], {
+    const wb = await createDamriExcelWorkbook(deps, startDate, endDate, segments, jalurList)
+    const arrayBuffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([arrayBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     })
     downloadBlob(blob, fileName)
@@ -78,7 +67,7 @@ export async function exportLaporanAK15(
 }
 
 /**
- * Ekspor Arsip Bulanan ke format Excel (.xlsx) dengan susunan template DAMRI
+ * Ekspor Arsip Bulanan ke format Excel (.xlsx) dengan susunan Data Master dan ALL BORDERS
  */
 export async function exportArsipBulanan(
   monthLabel: string,
@@ -108,20 +97,13 @@ export async function exportArsipBulanan(
       return
     }
   } catch (apiErr) {
-    console.warn("Gagal via /api/export-excel, fallback client-side:", apiErr)
+    console.warn("Gagal via /api/export-excel, fallback client-side ExcelJS:", apiErr)
   }
 
   try {
-    const resTemplate = await fetch("/template_laporan_excel.xlsx")
-    if (!resTemplate.ok) throw new Error("Template tidak ditemukan")
-
-    const arrayBuffer = await resTemplate.arrayBuffer()
-    const wb = XLSX.read(arrayBuffer, { cellFormula: true })
-
-    const outWb = populateDamriTemplate(wb, deps, "", "", segments, jalurList)
-
-    const outBuf = XLSX.write(outWb, { type: "array", bookType: "xlsx" })
-    const blob = new Blob([outBuf], {
+    const wb = await createDamriExcelWorkbook(deps, "", "", segments, jalurList)
+    const arrayBuffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([arrayBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     })
     downloadBlob(blob, fileName)

@@ -114,10 +114,10 @@ export const fmtDate = (iso: string) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
 export const seg = (id: string) => {
   const s = SEGMENTS.find((x) => x.id === id || (x as any).kode === id)
-  if (s) return s
-  if (!id) return { id: "bandara", nama: "Bandara", kontrak: false, aktif: true }
-  if (id === "bandara") return { id: "bandara", nama: "Bandara", kontrak: false, aktif: true }
-  if (id === "akap") return { id: "akap", nama: "Antar Kota", kontrak: false, aktif: true }
+  if (s) return { ...s, nilaiTetap: s.nilaiTetap ?? 0 }
+  if (!id) return { id: "bandara", nama: "Bandara", kontrak: false, nilaiTetap: 0, aktif: true }
+  if (id === "bandara") return { id: "bandara", nama: "Bandara", kontrak: false, nilaiTetap: 0, aktif: true }
+  if (id === "akap") return { id: "akap", nama: "Antar Kota", kontrak: false, nilaiTetap: 0, aktif: true }
   const pretty = id
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
@@ -125,13 +125,14 @@ export const seg = (id: string) => {
     id,
     nama: pretty,
     kontrak: false,
+    nilaiTetap: 0,
     aktif: true,
   }
 }
 
 export const jalur = (id: string) => {
   const j = JALUR.find((x) => x.id === id || x.nama === id)
-  if (j) return j
+  if (j) return { ...j, tarif: j.tarif ?? 0 }
   return {
     id: id || "j1",
     nama: id || "Jalur",
@@ -146,17 +147,20 @@ export const plat = (cb: string) => {
   return cb && !cb.startsWith("CB-") ? cb : ""
 }
 
-export function calc(d: Pick<Departure, 'segmentId' | 'jalurId' | 'penumpang' | 'pendapatan' | 'subsidi' | 'bagasi' | 'kmTempuh'>) {
+export function calc(d: Pick<Departure, 'segmentId' | 'jalurId' | 'penumpang' | 'pendapatan' | 'subsidi' | 'bagasi' | 'kmTempuh'> & Partial<Departure>) {
   const s = seg(d.segmentId)
   const tarif = jalur(d.jalurId)?.tarif ?? 0
-  const rev =
-    d.pendapatan != null
-      ? d.pendapatan
-      : s.kontrak
-        ? s.nilaiTetap ?? 0
-        : (d.penumpang ?? 0) * tarif
-  const umum = rev
-  const total = rev + (d.subsidi ?? 0) + (d.bagasi ?? 0)
+  let rev = d.pendapatan
+  if (rev == null) {
+    if (s.kontrak) {
+      rev = s.nilaiTetap ?? 0
+    } else {
+      const totalPnp = (d.penumpang ?? 0) + (d.pm ?? 0)
+      rev = totalPnp * (tarif || 0)
+    }
+  }
+  const umum = rev ?? 0
+  const total = umum + (d.subsidi ?? 0) + (d.bagasi ?? 0)
   const upp = d.kmTempuh ? total / d.kmTempuh : 0
   return { tarif, umum, total, upp }
 }

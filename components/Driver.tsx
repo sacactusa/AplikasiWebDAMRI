@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { CheckCircle2, History, List, Plus, User } from "lucide-react"
+import { History, List, Plus, User } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { ME } from "@/lib/data"
 import { cx } from "@/components/ui"
@@ -12,7 +12,7 @@ import ProfilSopir from "./driver/ProfilSopir"
 import InputKeberangkatan from "./driver/InputKeberangkatan"
 import DetailKeberangkatan from "./driver/DetailKeberangkatan"
 import { DRIVER_PHOTO, type DriverProfile } from "./driver/shared"
-import { createDeparture, updateDeparture, deleteDraftDeparture } from "@/lib/supabaseService"
+import { createDeparture, updateDeparture, deleteDraftDeparture, getDepartures } from "@/lib/supabaseService"
 
 interface Props {
   deps: Departure[]
@@ -29,8 +29,7 @@ type View =
   | { n: "riwayat" }
   | { n: "profil" }
   | { n: "add" }
-  | { n: "detail"; id: string }
-  | { n: "success" }
+  | { n: "detail"; id: string; dep?: Departure }
 
 export default function Driver({
   deps,
@@ -187,23 +186,26 @@ export default function Driver({
             currentUser={currentUser}
             onCancel={() => setView({ n: lastTabRef.current })}
             onSave={async (d) => {
-              setDeps((p) => [d, ...p])
-              setView({ n: "detail", id: d.id })
-              toast("Berhasil disimpan")
               if (!isDemoDriver) {
                 const res = await createDeparture(d, currentUser?.email)
-                if (res.id && res.id !== d.id) {
-                  setDeps((p) => p.map((x) => (x.id === d.id ? { ...x, id: res.id! } : x)))
-                  setView((v) => (v.n === "detail" && v.id === d.id ? { n: "detail", id: res.id! } : v))
-                } else if (!res.success) {
-                  toast("Gagal sinkron ke database Supabase", "error")
+                if (res.success && res.id) {
+                  const saved = { ...d, id: res.id }
+                  setDeps((p) => [saved, ...p.filter((x) => x.id !== d.id && x.id !== res.id)])
+                  setView({ n: "detail", id: res.id, dep: saved })
+                  toast("Jadwal tersimpan. Silakan isi hasil operasional lalu klik Kirim.")
+                } else {
+                  toast("Gagal menyimpan ke database Supabase", "error")
                 }
+              } else {
+                setDeps((p) => [d, ...p])
+                setView({ n: "detail", id: d.id, dep: d })
+                toast("Jadwal tersimpan. Silakan isi hasil operasional lalu klik Kirim.")
               }
             }}
           />
         )}
         {view.n === "detail" && (() => {
-          const targetDep = deps.find((d) => d.id === view.id)
+          const targetDep = deps.find((d) => d.id === view.id) || view.dep
           if (!targetDep) {
             return (
               <div className="flex min-h-[50vh] flex-col items-center justify-center p-8 text-center">
@@ -222,45 +224,36 @@ export default function Driver({
               key={view.id}
               dep={targetDep}
               offline={offline}
+              currentUser={currentUser}
               onBack={() => setView({ n: lastTabRef.current })}
               onDeleteDraft={handleDeleteDraft}
-              onSave={(d) => {
-                setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
+              onSave={async (d) => {
                 if (!isDemoDriver) {
-                  updateDeparture(d, profile.nama)
+                  await updateDeparture(d, profile.nama)
+                  getDepartures(false).then((live) => setDeps(live)).catch(() => {})
                 }
+                setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
                 setView({ n: lastTabRef.current })
-                toast("Berhasil disimpan")
+                toast("Draft berhasil disimpan")
               }}
-              onSubmit={(d) => {
-                setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
+              onSubmit={async (d) => {
                 if (!isDemoDriver) {
-                  updateDeparture(d, profile.nama)
+                  const ok = await updateDeparture(d, profile.nama)
+                  if (!ok) {
+                    toast("Gagal mengirim keberangkatan ke koordinator", "error")
+                    return
+                  }
+                  getDepartures(false).then((live) => setDeps(live)).catch(() => {})
                 }
-                submitted(d)
-                setView({ n: "success" })
-                setTimeout(
-                  () =>
-                    setView((v) =>
-                      v.n === "success" ? { n: lastTabRef.current } : v,
-                    ),
-                  2200,
-                )
+                const sentDep = { ...d, status: "dikirim" as const }
+                setDeps((p) => [sentDep, ...p.filter((x) => x.id !== d.id)])
+                submitted(sentDep)
+                setView({ n: lastTabRef.current })
+                toast("Keberangkatan berhasil dikirim ke koordinator!", "success")
               }}
             />
           )
         })()}
-        {view.n === "success" && (
-          <div className="rise flex min-h-[80vh] flex-col items-center justify-center px-8 text-center">
-            <div className="grid size-24 place-items-center rounded-full bg-emerald-50 text-emerald-700">
-              <CheckCircle2 size={48} strokeWidth={1.4} />
-            </div>
-            <h1 className="mt-6 font-serif text-3xl">Terkirim</h1>
-            <p className="mt-2 text-sm text-mute">
-              Keberangkatan menunggu verifikasi koordinator.
-            </p>
-          </div>
-        )}
       </div>
 
       {view.n === "list" && (
