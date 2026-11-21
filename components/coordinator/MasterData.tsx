@@ -513,15 +513,17 @@ export default function MasterData({ toast, currentUser }: Props) {
         return
       }
 
-      const normSeg = nama.toLowerCase().replace(/\s+/g, " ")
+      const cleanStr = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim()
+
       const isDupSeg = segs.some(
         (s) =>
           s.id !== editId &&
           (!editRawId || s.rawId !== editRawId) &&
-          s.nama.trim().toLowerCase().replace(/\s+/g, " ") === normSeg,
+          cleanStr(s.nama) === cleanStr(nama),
       )
       if (isDupSeg) {
-        toast(`Segmen '${nama}' sudah ada di data master`)
+        toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
         return
       }
 
@@ -543,6 +545,19 @@ export default function MasterData({ toast, currentUser }: Props) {
       }
 
       try {
+        const { data: dbSegs } = await supabase.from("segmen").select("id, nama")
+        if (
+          dbSegs &&
+          dbSegs.some(
+            (s) =>
+              s.id !== editRawId &&
+              s.id !== editId &&
+              cleanStr(s.nama) === cleanStr(nama),
+          )
+        ) {
+          toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+          return
+        }
         let savedRawId = editRawId
         if (editId) {
           let updErr = null
@@ -638,22 +653,57 @@ export default function MasterData({ toast, currentUser }: Props) {
       )
       const targetSegId = targetSeg?.id || segmentKode
       const targetSegRawId = targetSeg?.rawId
-      const targetSegNama = targetSeg?.nama ? `"${targetSeg.nama}"` : "ini"
 
-      // Validasi: Cegah duplikasi jalur pada segmen yang sama
-      const normNama = nama.trim().toLowerCase().replace(/\s+/g, " ")
-      const isDuplicateLocal = jals.some((j) => {
-        if (editId && j.id === editId) return false
-        const isSameSeg =
-          j.segmentId === targetSegId ||
-          (targetSegRawId && j.segmentId === targetSegRawId) ||
-          (targetSeg && (j as any).segmen_id === targetSegRawId)
-        if (!isSameSeg) return false
-        return j.nama.trim().toLowerCase().replace(/\s+/g, " ") === normNama
-      })
+      const cleanStr = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim()
 
-      if (isDuplicateLocal) {
-        toast(`Jalur '${nama}' sudah ada di segmen ${targetSegNama}`)
+      const checkJalurDuplicate = (
+        existingList: { id?: string; nama: string; segmentId?: string; segmen_id?: string }[],
+      ) => {
+        return existingList.some((j) => {
+          if (editId && j.id === editId) return false
+
+          // Pastikan perbandingan pada segmen yang sama jika informasi segmen ada
+          const segVal = j.segmentId || j.segmen_id
+          if (segVal) {
+            const isSameSeg =
+              segVal === targetSegId ||
+              (targetSegRawId && segVal === targetSegRawId) ||
+              (targetSeg && (segVal === targetSeg.rawId || segVal === targetSeg.id || segVal === targetSeg.nama))
+            if (!isSameSeg) return false
+          }
+
+          const jNamaClean = cleanStr(j.nama || "")
+          const newNamaClean = cleanStr(nama)
+
+          // 1. Nama lengkap rute sama (case & spasi insensitive)
+          if (jNamaClean === newNamaClean) return true
+
+          const jParts = (j.nama || "").split(/\s*-\s*/)
+          const jAsalClean = cleanStr(jParts[0] || "")
+          const jTujuanClean = jParts.length > 1 ? cleanStr(jParts.slice(1).join(" - ")) : ""
+          const newAsalClean = cleanStr(asal)
+          const newTujuanClean = cleanStr(tujuan)
+
+          // 2. Jika pengguna hanya menginput salah satu (dari / jalur asal saja tanpa tujuan)
+          if (!newTujuanClean) {
+            // Sama dengan asal jalur yang sudah ada di segmen ini, atau nama rute tersebut
+            if (jAsalClean === newAsalClean || jNamaClean === newAsalClean) return true
+          }
+
+          // 3. Jika pengguna menginput lengkap (asal dan tujuan diisi)
+          if (newAsalClean && newTujuanClean) {
+            if (jAsalClean === newAsalClean && jTujuanClean === newTujuanClean) return true
+            if (jNamaClean === newAsalClean) return true
+          }
+
+          return false
+        })
+      }
+
+      // Validasi duplikasi jalur di state lokal
+      if (checkJalurDuplicate(jals)) {
+        toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
         return
       }
 
@@ -710,18 +760,14 @@ export default function MasterData({ toast, currentUser }: Props) {
           return
         }
 
-        // Cek duplikasi di Supabase (nama jalur pada segmen_id yang sama)
-        let dupQuery = supabase
+        // Cek duplikasi di Supabase pada segmen yang bersangkutan
+        const { data: dbJals } = await supabase
           .from("jalur")
-          .select("id, nama")
+          .select("id, nama, segmen_id")
           .eq("segmen_id", segId)
-          .ilike("nama", nama)
-        if (editId) {
-          dupQuery = dupQuery.neq("id", editId)
-        }
-        const { data: dbDups } = await dupQuery.limit(1)
-        if (dbDups && dbDups.length > 0) {
-          toast(`Jalur '${nama}' sudah ada di segmen ${targetSegNama}`)
+
+        if (dbJals && checkJalurDuplicate(dbJals)) {
+          toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
           return
         }
 
@@ -796,16 +842,32 @@ export default function MasterData({ toast, currentUser }: Props) {
         return
       }
 
-      const normPlat = plat.toLowerCase().replace(/\s+/g, "")
+      const cleanPlat = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "").trim()
       const isDupVeh = vehs.some(
         (v) =>
           v.cb !== editId &&
           v.plat !== editId &&
-          v.plat.trim().toLowerCase().replace(/\s+/g, "") === normPlat,
+          cleanPlat(v.plat) === cleanPlat(plat),
       )
       if (isDupVeh) {
-        toast(`Kendaraan dengan plat '${plat}' sudah terdaftar`)
+        toast(`Gagal menyimpan "${plat}" karena sudah tersedia`)
         return
+      }
+
+      if (!isDemo) {
+        const { data: dbVehs } = await supabase.from("kendaraan").select("id, plat")
+        if (
+          dbVehs &&
+          dbVehs.some(
+            (v) =>
+              v.id !== editId &&
+              v.plat !== editId &&
+              cleanPlat(v.plat) === cleanPlat(plat),
+          )
+        ) {
+          toast(`Gagal menyimpan "${plat}" karena sudah tersedia`)
+          return
+        }
       }
       if (editId) {
         setVehs((p) => p.map((x) => x.cb === editId || x.plat === editId ? { ...x, plat, cb: plat } : x))
@@ -851,6 +913,23 @@ export default function MasterData({ toast, currentUser }: Props) {
       }
       if (!tarif || isNaN(tarif)) {
         toast("Silakan isi nominal tarif")
+        return
+      }
+
+      const matchedJal = jals.find((j) => j.id === jalurId)
+      const jalurNama = matchedJal?.nama || jalurId
+
+      const isDupTarif = tarifs.some((t) => {
+        if (editId && t.id === editId) return false
+        if (prevJalurId && prevMulai && t.jalurId === prevJalurId && t.mulai === prevMulai) return false
+        return (
+          t.jalurId === jalurId &&
+          (t.jenisPenumpangId === jenisPenumpangId || t.jenisPenumpangNama === jenisPenumpangNama) &&
+          t.mulai === mulai
+        )
+      })
+      if (isDupTarif) {
+        toast(`Gagal menyimpan tarif "${jalurNama}" karena sudah tersedia`)
         return
       }
 
@@ -1015,14 +1094,16 @@ export default function MasterData({ toast, currentUser }: Props) {
         return
       }
 
-      const normPax = nama.toLowerCase().replace(/\s+/g, " ")
+      const cleanStr = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim()
+
       const isDupPax = paxs.some(
         (p) =>
           p.id !== editId &&
-          p.nama.trim().toLowerCase().replace(/\s+/g, " ") === normPax,
+          cleanStr(p.nama) === cleanStr(nama),
       )
       if (isDupPax) {
-        toast(`Jenis penumpang '${nama}' sudah terdaftar`)
+        toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
         return
       }
 
@@ -1042,6 +1123,18 @@ export default function MasterData({ toast, currentUser }: Props) {
       }
 
       try {
+        const { data: dbPaxs } = await supabase.from("jenis_penumpang").select("id, nama")
+        if (
+          dbPaxs &&
+          dbPaxs.some(
+            (p) =>
+              p.id !== editId &&
+              cleanStr(p.nama || "") === cleanStr(nama),
+          )
+        ) {
+          toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+          return
+        }
         if (editId && UUID_REGEX.test(editId)) {
           const { error: updErr } = await supabase
             .from("jenis_penumpang")
