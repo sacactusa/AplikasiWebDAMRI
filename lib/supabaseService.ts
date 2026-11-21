@@ -120,6 +120,8 @@ export async function getMasterData(isDemo = false): Promise<{
         segmentId: segKode,
         tarif: tarifMap.get(j.id) ?? 0,
         aktif: Boolean(j.aktif),
+        kmTempuh: j.km_tempuh != null ? Number(j.km_tempuh) : null,
+        kmEmpty: j.km_empty != null ? Number(j.km_empty) : null,
       }
     })
 
@@ -324,6 +326,18 @@ export async function createDeparture(
   try {
     const ids = await resolveIds(d, driverEmail)
 
+    let finalKmTempuh = d.kmTempuh != null && Number(d.kmTempuh) > 0 ? Number(d.kmTempuh) : null
+    let finalKmEmpty = d.kmEmpty != null ? Number(d.kmEmpty) : null
+    if (finalKmTempuh == null && ids.jalur_id) {
+      const { data: jRow } = await supabase.from("jalur").select("km_tempuh, km_empty").eq("id", ids.jalur_id).limit(1)
+      if (jRow?.[0]?.km_tempuh != null) {
+        finalKmTempuh = Number(jRow[0].km_tempuh)
+        if (finalKmEmpty == null) {
+          finalKmEmpty = jRow[0].km_empty != null ? Number(jRow[0].km_empty) : 0
+        }
+      }
+    }
+
     const isDikirim = d.status === "dikirim"
     const payload: Record<string, any> = {
       tanggal: d.date,
@@ -332,8 +346,8 @@ export async function createDeparture(
       jalur_id: ids.jalur_id,
       kendaraan_id: ids.kendaraan_id,
       sopir_id: ids.sopir_id,
-      km_tempuh: d.kmTempuh != null ? Number(d.kmTempuh) : (isDikirim ? 0 : null),
-      km_empty: d.kmEmpty != null ? Number(d.kmEmpty) : (isDikirim ? 0 : null),
+      km_tempuh: finalKmTempuh != null ? finalKmTempuh : (isDikirim ? 0 : null),
+      km_empty: finalKmEmpty != null ? finalKmEmpty : (isDikirim ? 0 : null),
       penumpang: d.penumpang != null ? Number(d.penumpang) : (isDikirim ? 0 : null),
       pm: d.pm != null ? Number(d.pm) : (isDikirim ? 0 : null),
       pendapatan: d.pendapatan != null ? Number(d.pendapatan) : (isDikirim ? 0 : null),
@@ -392,9 +406,21 @@ export async function updateDeparture(
       return createRes.success
     }
 
+    let finalKmTempuh = d.kmTempuh != null && Number(d.kmTempuh) > 0 ? Number(d.kmTempuh) : null
+    let finalKmEmpty = d.kmEmpty != null ? Number(d.kmEmpty) : null
+    if (finalKmTempuh == null && d.jalurId) {
+      const { data: jRow } = await supabase.from("jalur").select("km_tempuh, km_empty").eq("id", d.jalurId).limit(1)
+      if (jRow?.[0]?.km_tempuh != null) {
+        finalKmTempuh = Number(jRow[0].km_tempuh)
+        if (finalKmEmpty == null) {
+          finalKmEmpty = jRow[0].km_empty != null ? Number(jRow[0].km_empty) : 0
+        }
+      }
+    }
+
     const payload: Record<string, any> = {
-      km_tempuh: d.kmTempuh != null ? Number(d.kmTempuh) : (isDikirim ? 0 : null),
-      km_empty: d.kmEmpty != null ? Number(d.kmEmpty) : (isDikirim ? 0 : null),
+      km_tempuh: finalKmTempuh != null ? finalKmTempuh : (isDikirim ? 0 : null),
+      km_empty: finalKmEmpty != null ? finalKmEmpty : (isDikirim ? 0 : null),
       penumpang: d.penumpang != null ? Number(d.penumpang) : (isDikirim ? 0 : null),
       pm: d.pm != null ? Number(d.pm) : (isDikirim ? 0 : null),
       pendapatan: d.pendapatan != null ? Number(d.pendapatan) : (isDikirim ? 0 : null),

@@ -14,6 +14,8 @@ export interface Jalur {
   segmentId: string
   tarif: number
   aktif: boolean
+  kmTempuh?: number | null
+  kmEmpty?: number | null
 }
 export interface Vehicle {
   cb: string
@@ -80,14 +82,14 @@ export const SEGMENTS: Segment[] = [
 ]
 
 export const JALUR: Jalur[] = [
-  { id: 'j1', nama: 'Dipatiukur – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true },
-  { id: 'j2', nama: 'Kota Baru Parahyangan – Soekarno-Hatta', segmentId: 'bandara', tarif: 160000, aktif: true },
-  { id: 'j3', nama: 'Cicaheum – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true },
-  { id: 'j4', nama: 'Bandung – Garut', segmentId: 'akap', tarif: 55000, aktif: true },
-  { id: 'j5', nama: 'Bandung – Cirebon', segmentId: 'akap', tarif: 85000, aktif: true },
-  { id: 'j6', nama: 'Jemputan Karyawan Cimahi', segmentId: 'jemputan', tarif: 0, aktif: true },
-  { id: 'j7', nama: 'Borongan Wisata Lembang', segmentId: 'borongan', tarif: 0, aktif: true },
-  { id: 'j8', nama: 'Haji Embarkasi Bandung', segmentId: 'haji', tarif: 0, aktif: true },
+  { id: 'j1', nama: 'Dipatiukur – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true, kmTempuh: 165, kmEmpty: 5 },
+  { id: 'j2', nama: 'Kota Baru Parahyangan – Soekarno-Hatta', segmentId: 'bandara', tarif: 160000, aktif: true, kmTempuh: 180, kmEmpty: 8 },
+  { id: 'j3', nama: 'Cicaheum – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true, kmTempuh: 170, kmEmpty: 5 },
+  { id: 'j4', nama: 'Bandung – Garut', segmentId: 'akap', tarif: 55000, aktif: true, kmTempuh: 65, kmEmpty: 2 },
+  { id: 'j5', nama: 'Bandung – Cirebon', segmentId: 'akap', tarif: 85000, aktif: true, kmTempuh: 130, kmEmpty: 4 },
+  { id: 'j6', nama: 'Jemputan Karyawan Cimahi', segmentId: 'jemputan', tarif: 0, aktif: true, kmTempuh: 35, kmEmpty: 0 },
+  { id: 'j7', nama: 'Borongan Wisata Lembang', segmentId: 'borongan', tarif: 0, aktif: true, kmTempuh: 40, kmEmpty: 0 },
+  { id: 'j8', nama: 'Haji Embarkasi Bandung', segmentId: 'haji', tarif: 0, aktif: true, kmTempuh: 85, kmEmpty: 0 },
 ]
 
 export const VEHICLES: Vehicle[] = [
@@ -162,14 +164,13 @@ export function calc(d: Pick<Departure, 'segmentId' | 'jalurId' | 'penumpang' | 
   }
   const umum = rev ?? 0
   const total = umum + (d.subsidi ?? 0) + (d.bagasi ?? 0)
-  const upp = d.kmTempuh ? total / d.kmTempuh : 0
+  const km = (d.kmTempuh != null && Number(d.kmTempuh) > 0) ? Number(d.kmTempuh) : (jalur(d.jalurId)?.kmTempuh || 0)
+  const upp = km ? total / km : 0
   return { tarif, umum, total, upp }
 }
 
 export function missing(d: Departure): string[] {
   const m: string[] = []
-  if (d.kmTempuh == null) m.push('kmTempuh')
-  if (d.kmEmpty == null) m.push('kmEmpty')
   if (d.penumpang == null) m.push('penumpang')
   if (d.pm == null) m.push('pm')
   return m

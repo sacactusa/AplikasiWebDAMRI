@@ -319,10 +319,12 @@ export function buildDynamicAK15Worksheet(
       }
 
       // Siapkan daftar seluruh rute untuk segmen ini (jalur data master + jalur ekstra)
-      const allSegmentRoutes: { nama: string; tarif: number; jalurId?: string }[] = segJalurList.map((j) => ({
+      const allSegmentRoutes: { nama: string; tarif: number; jalurId?: string; kmTempuh?: number | null; kmEmpty?: number | null }[] = segJalurList.map((j) => ({
         nama: j.nama,
         tarif: j.tarif || 0,
         jalurId: j.id,
+        kmTempuh: j.kmTempuh != null ? Number(j.kmTempuh) : null,
+        kmEmpty: j.kmEmpty != null ? Number(j.kmEmpty) : null,
       }))
       extraRoutes.forEach((xName) => {
         allSegmentRoutes.push({ nama: xName, tarif: 0 })
@@ -352,6 +354,11 @@ export function buildDynamicAK15Worksheet(
         // SO = Jumlah bus yang beroperasi pada hari tersebut (dalam 1 hari)
         const so = new Set(lineDeps.map((d) => d.cb).filter(Boolean)).size
         const rit = lineDeps.length
+
+        // Cek nilai jarak tetap dari master data jalur
+        const fixedKmTempuh = routeObj.kmTempuh != null && Number(routeObj.kmTempuh) > 0 ? Number(routeObj.kmTempuh) : null
+        const fixedKmEmpty = routeObj.kmEmpty != null ? Number(routeObj.kmEmpty) : null
+
         let kmTempuh = 0
         let kmEmpty = 0
         let pnp = 0
@@ -364,8 +371,10 @@ export function buildDynamicAK15Worksheet(
 
         lineDeps.forEach((d) => {
           const c = calc(d)
-          kmTempuh += d.kmTempuh || 0
-          kmEmpty += d.kmEmpty || 0
+          const dTempuh = (d.kmTempuh != null && Number(d.kmTempuh) > 0) ? Number(d.kmTempuh) : (fixedKmTempuh || 0)
+          const dEmpty = (d.kmEmpty != null && Number(d.kmEmpty) > 0) ? Number(d.kmEmpty) : (fixedKmEmpty || 0)
+          kmTempuh += dTempuh
+          kmEmpty += dEmpty
           pnp += d.penumpang || 0
           pm += d.pm || 0
           tarif = c.tarif || tarif
@@ -375,6 +384,20 @@ export function buildDynamicAK15Worksheet(
           upp += c.total
         })
 
+        // KM PER RIT (Kolom E & F)
+        // Nilai tetap jarak dari Master Data Jalur
+        const kmPerRit = fixedKmTempuh != null ? fixedKmTempuh : (rit > 0 ? Math.round(kmTempuh / rit) : 0)
+        const kmEmptyPerRit = fixedKmEmpty != null ? fixedKmEmpty : (so > 0 ? Math.round(kmEmpty / so) : 0)
+
+        // Hitung total kilometer per jalur jika ada jarak tetap
+        if (fixedKmTempuh != null && rit > 0) {
+          kmTempuh = rit * fixedKmTempuh
+        }
+        if (fixedKmEmpty != null && so > 0) {
+          kmEmpty = so * fixedKmEmpty
+        }
+
+        // Akumulasi total ke segmen
         segRit += rit
         segKmTempuh += kmTempuh
         segKmEmpty += kmEmpty
@@ -388,8 +411,6 @@ export function buildDynamicAK15Worksheet(
 
         const jmlhKm = kmTempuh + kmEmpty
         const jmlhPnp = pnp + pm
-        const kmPerRit = rit > 0 ? Math.round(kmTempuh / rit) : 0
-        const kmEmptyPerRit = so > 0 ? Math.round(kmEmpty / so) : 0
         const ritPerBus = so > 0 ? Number((rit / so).toFixed(2)) : "-"
         const pnpPerRit = rit > 0 ? Number((jmlhPnp / rit).toFixed(2)) : "-"
         const uppPerBus = so > 0 ? Math.round(upp / so) : "-"
@@ -808,6 +829,14 @@ export function buildDynamicDetailWorksheet(
     const ruteNama = resolveRouteName(d, masterJalur)
     const segNama = resolveSegmentName(d.segmentId, masterSegments)
 
+    const matchedJ = masterJalur.find((j) => j.id === d.jalurId || j.nama.toLowerCase() === ruteNama.toLowerCase())
+    const rowKmTempuh = (d.kmTempuh != null && Number(d.kmTempuh) > 0)
+      ? Number(d.kmTempuh)
+      : (matchedJ?.kmTempuh != null && Number(matchedJ.kmTempuh) > 0 ? Number(matchedJ.kmTempuh) : 0)
+    const rowKmEmpty = (d.kmEmpty != null && Number(d.kmEmpty) > 0)
+      ? Number(d.kmEmpty)
+      : (matchedJ?.kmEmpty != null ? Number(matchedJ.kmEmpty) : 0)
+
     const rData = ws.addRow([
       idx + 1,
       formatShortDate(d.date),
@@ -817,8 +846,8 @@ export function buildDynamicDetailWorksheet(
       d.cb,
       getPlat(d.cb) || d.cb,
       d.driver,
-      d.kmTempuh || 0,
-      d.kmEmpty || 0,
+      rowKmTempuh,
+      rowKmEmpty,
       d.penumpang || 0,
       d.pm || 0,
       d.pendapatan || 0,

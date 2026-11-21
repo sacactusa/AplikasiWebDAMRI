@@ -14,6 +14,8 @@ export interface Jalur {
   segmentId: string
   tarif: number
   aktif: boolean
+  kmTempuh?: number | null
+  kmEmpty?: number | null
 }
 
 export interface Vehicle {

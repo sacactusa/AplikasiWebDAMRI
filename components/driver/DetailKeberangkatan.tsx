@@ -62,6 +62,14 @@ export default function DetailKeberangkatan({
 
     async function loadTarifDanPenumpang() {
       if (isDemoDriver) {
+        const jObj = jalur(d.jalurId)
+        if (jObj && active) {
+          setD((prev) => ({
+            ...prev,
+            kmTempuh: prev.kmTempuh != null && Number(prev.kmTempuh) > 0 ? prev.kmTempuh : (jObj.kmTempuh ?? prev.kmTempuh),
+            kmEmpty: prev.kmEmpty != null ? prev.kmEmpty : (jObj.kmEmpty ?? prev.kmEmpty),
+          }))
+        }
         const demoTarifs: Record<string, TarifItem[]> = {
           j1: [{ id: "umum", nama: "Umum", tarif: 140000 }],
           j2: [{ id: "umum", nama: "Umum", tarif: 150000 }],
@@ -86,16 +94,26 @@ export default function DetailKeberangkatan({
       }
 
       try {
-        const [paxsRes, tjRes] = await Promise.all([
+        const [paxsRes, tjRes, jalRes] = await Promise.all([
           supabase.from("jenis_penumpang").select("*").order("created_at"),
           supabase
             .from("tarif_jalur")
             .select("*")
             .eq("jalur_id", d.jalurId)
             .order("berlaku_mulai", { ascending: false }),
+          supabase.from("jalur").select("id, nama, km_tempuh, km_empty").eq("id", d.jalurId).limit(1),
         ])
 
         if (!active) return
+
+        if (jalRes.data?.[0]) {
+          const jRow = jalRes.data[0]
+          setD((prev) => ({
+            ...prev,
+            kmTempuh: prev.kmTempuh != null && Number(prev.kmTempuh) > 0 ? prev.kmTempuh : (jRow.km_tempuh != null ? Number(jRow.km_tempuh) : prev.kmTempuh),
+            kmEmpty: prev.kmEmpty != null ? prev.kmEmpty : (jRow.km_empty != null ? Number(jRow.km_empty) : prev.kmEmpty),
+          }))
+        }
 
         let activePaxs = (paxsRes.data || []).filter((p) => p.aktif)
         if (paxsRes.error || activePaxs.length === 0) {
@@ -210,9 +228,8 @@ export default function DetailKeberangkatan({
   const set = (k: keyof Departure) => (v: number | null) =>
     setD((p) => ({ ...p, [k]: v }))
 
-  // Cek apakah ada field wajib yang belum diisi (hanya KM tempuh yang wajib > 0)
-  const isKmTempuhMissing = d.kmTempuh == null || Number(d.kmTempuh) <= 0
-  const hasErrors = isKmTempuhMissing
+  // Jarak kini telah menjadi nilai tetap dari Master Data Jalur sehingga tidak diinput lagi oleh sopir
+  const hasErrors = false
 
   const prepare = (status?: Departure["status"]): Departure => {
     let umumCount = 0
@@ -238,10 +255,24 @@ export default function DetailKeberangkatan({
       pmCount = d.pm ?? 0
     }
 
+    const jObj = jalur(d.jalurId)
+    const fixedKmTempuh =
+      d.kmTempuh != null && Number(d.kmTempuh) > 0
+        ? Number(d.kmTempuh)
+        : jObj?.kmTempuh != null && Number(jObj.kmTempuh) > 0
+          ? Number(jObj.kmTempuh)
+          : 0
+    const fixedKmEmpty =
+      d.kmEmpty != null
+        ? Number(d.kmEmpty)
+        : jObj?.kmEmpty != null
+          ? Number(jObj.kmEmpty)
+          : 0
+
     return {
       ...d,
-      kmTempuh: d.kmTempuh != null ? Number(d.kmTempuh) : 0,
-      kmEmpty: d.kmEmpty != null ? Number(d.kmEmpty) : 0,
+      kmTempuh: fixedKmTempuh,
+      kmEmpty: fixedKmEmpty,
       penumpang: umumCount,
       pm: pmCount,
       pendapatan: revenueFromPassengers ?? 0,
@@ -277,17 +308,13 @@ export default function DetailKeberangkatan({
     k: keyof Departure,
     o: { money?: boolean; suffix?: string; locked?: boolean } = {},
   ) => {
-    const isFieldMissing =
-      tried && k === "kmTempuh" && isKmTempuhMissing
-
     return (
-      <Field label={label} error={isFieldMissing ? "Wajib diisi (> 0 km)" : undefined} locked={o.locked}>
+      <Field label={label} locked={o.locked}>
         <NumInput
           value={d[k] as number | null}
           onChange={set(k)}
           money={o.money}
           suffix={o.suffix}
-          error={!!isFieldMissing}
           disabled={ro || o.locked}
         />
       </Field>
@@ -339,18 +366,9 @@ export default function DetailKeberangkatan({
           </p>
         )}
 
-        {/* 1 · Jarak */}
+        {/* 1 · Penumpang - Dinamis sesuai jenis penumpang pada segmen & jalur */}
         {card(
-          "1 · Jarak",
-          <>
-            {num("KM tempuh", "kmTempuh", { suffix: "km" })}
-            {num("KM empty", "kmEmpty", { suffix: "km" })}
-          </>,
-        )}
-
-        {/* 2 · Penumpang - Dinamis sesuai jenis penumpang pada segmen & jalur */}
-        {card(
-          "2 · Penumpang",
+          "1 · Penumpang",
           <>
             {tarifItems.length > 0 ? (
               tarifItems.map((item) => {
@@ -390,18 +408,18 @@ export default function DetailKeberangkatan({
           </>,
         )}
 
-        {/* 3 · Pendapatan */}
+        {/* 2 · Pendapatan */}
         {card(
-          "3 · Pendapatan",
+          "2 · Pendapatan",
           <>
             {num("Subsidi", "subsidi", { money: true, locked: s.kontrak })}
             {num("Bagasi", "bagasi", { money: true })}
           </>,
         )}
 
-        {/* 4 · Total Pendapatan */}
+        {/* 3 · Total Pendapatan */}
         {card(
-          "4 · Total Pendapatan",
+          "3 · Total Pendapatan",
           <>
             <div className="space-y-2.5 text-sm">
               <div className="flex justify-between items-center py-1 border-b border-line/50">

@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
           segmentId: j.segmen_id,
           tarif: 0,
           aktif: Boolean(j.aktif),
+          kmTempuh: j.km_tempuh != null ? Number(j.km_tempuh) : null,
+          kmEmpty: j.km_empty != null ? Number(j.km_empty) : null,
         }))
       }
     }

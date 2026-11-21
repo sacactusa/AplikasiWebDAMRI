@@ -171,8 +171,10 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                           setMenuPos(null)
                         } else {
                           const rect = e.currentTarget.getBoundingClientRect()
+                          const menuHeight = 175
+                          const isNearBottom = rect.bottom + menuHeight > window.innerHeight
                           setMenuPos({
-                            top: rect.bottom + 4,
+                            top: isNearBottom ? Math.max(8, rect.top - menuHeight - 4) : rect.bottom + 4,
                             right: Math.max(16, window.innerWidth - rect.right),
                           })
                           setActiveMenu(u.e)

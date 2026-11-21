@@ -85,6 +85,7 @@ export function Dialog({
   onClose,
   danger,
   actions,
+  className,
 }: {
   open: boolean
   title: string
@@ -92,6 +93,7 @@ export function Dialog({
   onClose: () => void
   danger?: boolean
   actions: ReactNode
+  className?: string
 }) {
   if (!open) return null
   return (
@@ -103,7 +105,8 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         className={cx(
-          "rise w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-line bg-white p-6 shadow-2xl",
+          "rise w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-line bg-white p-6 shadow-2xl",
+          className || "max-w-md",
           danger && "border-t-4 border-red-600",
         )}
         onClick={(e) => e.stopPropagation()}

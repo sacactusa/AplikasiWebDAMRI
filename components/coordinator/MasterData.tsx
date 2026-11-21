@@ -657,6 +657,8 @@ export default function MasterData({ toast, currentUser }: Props) {
       const tujuan = f("tujuan").trim()
       const nama = asal && tujuan ? `${asal} - ${tujuan}` : (asal || f("nama") || tujuan).trim()
       const segmentKode = f("segmentId") || segs[0]?.id || ""
+      const kmTempuh = f("kmTempuh") ? Number(f("kmTempuh")) : 0
+      const kmEmpty = f("kmEmpty") ? Number(f("kmEmpty")) : 0
       const editId = f("id")
 
       if (!nama) {
@@ -727,7 +729,7 @@ export default function MasterData({ toast, currentUser }: Props) {
         if (editId) {
           setJals((p) =>
             p.map((x) =>
-              x.id === editId ? { ...x, nama, segmentId: segmentKode } : x,
+              x.id === editId ? { ...x, nama, segmentId: segmentKode, kmTempuh, kmEmpty } : x,
             ),
           )
         } else {
@@ -739,6 +741,8 @@ export default function MasterData({ toast, currentUser }: Props) {
               segmentId: segmentKode,
               tarif: 0,
               aktif: true,
+              kmTempuh,
+              kmEmpty,
             },
           ])
         }
@@ -788,10 +792,18 @@ export default function MasterData({ toast, currentUser }: Props) {
         }
 
         if (f("id")) {
-          const { error: updErr } = await supabase
+          let { error: updErr } = await supabase
             .from("jalur")
-            .update({ nama, segmen_id: segId })
+            .update({ nama, segmen_id: segId, km_tempuh: kmTempuh, km_empty: kmEmpty })
             .eq("id", f("id"))
+
+          if (updErr && updErr.code === "42703") {
+            const res = await supabase
+              .from("jalur")
+              .update({ nama, segmen_id: segId })
+              .eq("id", f("id"))
+            updErr = res.error
+          }
 
           if (updErr) {
             console.error("Gagal update jalur di Supabase:", updErr)
@@ -801,22 +813,31 @@ export default function MasterData({ toast, currentUser }: Props) {
 
           setJals((p) =>
             p.map((x) =>
-              x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x,
+              x.id === f("id")
+                ? { ...x, nama, segmentId: segmentKode, kmTempuh, kmEmpty }
+                : x,
             ),
           )
         } else {
-          const { data: ins, error: insErr } = await supabase
+          let insRes = await supabase
             .from("jalur")
-            .insert({ nama, segmen_id: segId, aktif: true })
+            .insert({ nama, segmen_id: segId, km_tempuh: kmTempuh, km_empty: kmEmpty, aktif: true })
             .select()
 
-          if (insErr || !ins?.[0]) {
-            console.error("Gagal tambah jalur ke Supabase:", insErr)
-            toast(`Gagal menyimpan jalur: ${insErr?.message || "Terjadi kesalahan"}`)
+          if (insRes.error && insRes.error.code === "42703") {
+            insRes = await supabase
+              .from("jalur")
+              .insert({ nama, segmen_id: segId, aktif: true })
+              .select()
+          }
+
+          if (insRes.error || !insRes.data?.[0]) {
+            console.error("Gagal tambah jalur ke Supabase:", insRes.error)
+            toast(`Gagal menyimpan jalur: ${insRes.error?.message || "Terjadi kesalahan"}`)
             return
           }
 
-          const newJalurId = ins[0].id
+          const newJalurId = insRes.data[0].id
 
           setJals((p) => [
             ...p,
@@ -826,6 +847,8 @@ export default function MasterData({ toast, currentUser }: Props) {
               segmentId: segmentKode,
               tarif: 0,
               aktif: true,
+              kmTempuh,
+              kmEmpty,
             },
           ])
         }
@@ -1441,7 +1464,7 @@ export default function MasterData({ toast, currentUser }: Props) {
               if (tab === "Segmen") {
                 setForm({ aktif: "ya" })
               } else if (tab === "Jalur") {
-                setForm({ segmentId: segs[0]?.id || "", asal: "", tujuan: "" })
+                setForm({ segmentId: segs[0]?.id || "", asal: "", tujuan: "", kmTempuh: "", kmEmpty: "" })
               } else if (tab === "Tarif") {
                 const initSeg = segs[0]?.id || ""
                 const initJals = jals.filter(
@@ -1507,22 +1530,22 @@ export default function MasterData({ toast, currentUser }: Props) {
       <div
         className={cx(
           tableWrap,
-          "min-h-[300px] bg-white shadow-xs transition-all",
-          tab === "Segmen" && "max-w-2xl sm:max-w-3xl",
-          tab === "Jalur" && "max-w-2xl sm:max-w-3xl",
-          tab === "Tarif" && "max-w-4xl sm:max-w-5xl",
-          tab === "Kendaraan" && "max-w-2xl sm:max-w-3xl",
-          tab === "Penumpang" && "max-w-2xl sm:max-w-3xl",
+          "min-h-[300px] w-full bg-white shadow-xs transition-all",
+          tab === "Segmen" && "max-w-4xl sm:max-w-5xl",
+          tab === "Jalur" && "max-w-full",
+          tab === "Tarif" && "max-w-full",
+          tab === "Kendaraan" && "max-w-4xl sm:max-w-5xl",
+          tab === "Penumpang" && "max-w-4xl sm:max-w-5xl",
         )}
       >
         <table
           className={cx(
             "w-full text-left",
             tab === "Tarif"
-              ? "min-w-[760px]"
+              ? "min-w-[840px]"
               : tab === "Jalur"
-                ? "min-w-[500px]"
-                : "min-w-full",
+                ? "min-w-[760px]"
+                : "min-w-[540px]",
           )}
         >
           <thead className="border-b border-line bg-wash">
@@ -1536,10 +1559,11 @@ export default function MasterData({ toast, currentUser }: Props) {
               )}
               {tab === "Jalur" && (
                 <>
-                  <th className={cx(thCls, "w-28 sm:w-36 whitespace-nowrap")}>Segmen</th>
+                  <th className={cx(thCls, "w-44 sm:w-56 whitespace-nowrap")}>Segmen</th>
                   <th className={thCls}>Jalur</th>
-                  <th className={cx(thCenter, "w-28 sm:w-32")}>Status</th>
-                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                  <th className={cx(thCls, "w-52 sm:w-64 whitespace-nowrap")}>Jarak</th>
+                  <th className={cx(thCenter, "w-28 sm:w-36")}>Status</th>
+                  <th className={cx(thCenter, "w-28 sm:w-32")}>Aksi</th>
                 </>
               )}
               {tab === "Tarif" && (
@@ -1572,7 +1596,7 @@ export default function MasterData({ toast, currentUser }: Props) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={tab === "Segmen" || tab === "Kendaraan" || tab === "Penumpang" ? 3 : tab === "Tarif" ? 7 : 4} className="py-14 text-center">
+                <td colSpan={tab === "Segmen" || tab === "Kendaraan" || tab === "Penumpang" ? 3 : tab === "Tarif" ? 7 : 5} className="py-14 text-center">
                   <div className="inline-flex items-center gap-2 text-sm text-mute">
                     <LoaderCircle size={18} className="animate-spin text-navy" />
                     <span>Memuat data {tab.toLowerCase()}...</span>
@@ -1633,7 +1657,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                 {tab === "Jalur" &&
                   (jals.filter((j) => has(j.nama + (segs.find((s) => s.id === j.segmentId)?.nama || ""))).length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-12 text-center text-sm text-mute">
+                      <td colSpan={5} className="py-12 text-center text-sm text-mute">
                         {q ? (
                           <span>Tidak ada jalur yang sesuai dengan &ldquo;{q}&rdquo;.</span>
                         ) : (
@@ -1646,11 +1670,21 @@ export default function MasterData({ toast, currentUser }: Props) {
                       .filter((j) => has(j.nama + (segs.find((s) => s.id === j.segmentId)?.nama || "")))
                       .map((j, i, arr) => (
                         <tr key={j.id} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
-                          <td className={cx(tdCls, "w-28 sm:w-36 whitespace-nowrap font-semibold text-ink")}>
+                          <td className={cx(tdCls, "w-44 sm:w-56 whitespace-nowrap font-semibold text-ink")}>
                             {segs.find((s) => s.id === j.segmentId)?.nama || seg(j.segmentId).nama}
                           </td>
                           <td className={cx(tdCls, "font-medium text-slate-800")}>{j.nama}</td>
-                          <td className={cx(tdCenter, "w-28 sm:w-32")}>{aktifBadge(j.aktif)}</td>
+                          <td className={cx(tdCls, "w-52 sm:w-64 whitespace-nowrap text-xs")}>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3.5">
+                              <span className="font-medium text-ink">
+                                Tempuh: {j.kmTempuh != null && Number(j.kmTempuh) > 0 ? `${j.kmTempuh} km` : "–"}
+                              </span>
+                              <span className="font-medium text-mute">
+                                Empty: {j.kmEmpty != null && Number(j.kmEmpty) > 0 ? `${j.kmEmpty} km` : "–"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className={cx(tdCenter, "w-28 sm:w-36")}>{aktifBadge(j.aktif)}</td>
                           <Aksi
                             rowKey={`jal_${j.id}`}
                             aktif={j.aktif}
@@ -1667,9 +1701,11 @@ export default function MasterData({ toast, currentUser }: Props) {
                                 asal,
                                 tujuan,
                                 segmentId: j.segmentId,
+                                kmTempuh: j.kmTempuh != null && Number(j.kmTempuh) > 0 ? String(j.kmTempuh) : "",
+                                kmEmpty: j.kmEmpty != null && Number(j.kmEmpty) > 0 ? String(j.kmEmpty) : "",
                               })
                             }}
-                            onToggle={() => toggle(jals, setJals, i)}
+                            onToggle={() => toggle(jals, setJals, j)}
                             onDelete={() => setDeleteTarget({ type: "Jalur", id: j.id, name: j.nama })}
                           />
                         </tr>
@@ -1872,6 +1908,7 @@ export default function MasterData({ toast, currentUser }: Props) {
 
       <Dialog
         open={!!form}
+        className={tab === "Jalur" || tab === "Tarif" ? "max-w-lg" : "max-w-md"}
         title={`${f("id") || f("prevJalurId") ? (tab === "Tarif" ? "Edit" : "Ubah") : "Tambah"} ${tab === "Penumpang" ? "Jenis Penumpang" : tab === "Tarif" ? "Tarif" : tab.toLowerCase()}`}
         onClose={() => setForm(null)}
         actions={
@@ -1945,6 +1982,31 @@ export default function MasterData({ toast, currentUser }: Props) {
                     value={f("tujuan")}
                     onChange={(e) => set("tujuan", e.target.value)}
                     placeholder="Contoh: Ledeng (opsional)"
+                    className={inputCls()}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="KM Tempuh">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={f("kmTempuh")}
+                    onChange={(e) => set("kmTempuh", e.target.value)}
+                    placeholder="Contoh: 15"
+                    className={inputCls()}
+                  />
+                </Field>
+                <Field label="KM Empty">
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={f("kmEmpty")}
+                    onChange={(e) => set("kmEmpty", e.target.value)}
+                    placeholder="Contoh: 2"
                     className={inputCls()}
                   />
                 </Field>
