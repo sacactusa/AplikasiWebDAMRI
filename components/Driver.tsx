@@ -99,7 +99,7 @@ export default function Driver({
     [deps, profile.nama, currentUser, isDemoDriver],
   )
   const pendingRevisions = useMemo(
-    () => mine.filter((d) => Boolean(d.rejectNote)).length,
+    () => mine.filter((d) => d.status === "perbaikan" || Boolean(d.rejectNote)).length,
     [mine],
   )
   const tab =
@@ -245,11 +245,11 @@ export default function Driver({
                   }
                   getDepartures(false).then((live) => setDeps(live)).catch(() => {})
                 }
-                const sentDep = { ...d, status: "dikirim" as const }
+                const sentDep = { ...d, status: "dikirim" as const, rejectNote: undefined }
                 setDeps((p) => [sentDep, ...p.filter((x) => x.id !== d.id)])
                 submitted(sentDep)
                 setView({ n: lastTabRef.current })
-                toast("Keberangkatan berhasil dikirim ke koordinator!", "success")
+                toast(targetDep?.rejectNote ? "Perbaikan berhasil dikirim ke koordinator!" : "Keberangkatan berhasil dikirim ke koordinator!", "success")
               }}
             />
           )
@@ -271,15 +271,9 @@ export default function Driver({
             {
               k: "list",
               l: "Keberangkatan",
-              i: <List size={22} />,
-              v: { n: "list" } as View,
-            },
-            {
-              k: "riwayat",
-              l: "Riwayat",
               i: (
                 <span className="relative inline-flex items-center justify-center">
-                  <History size={22} />
+                  <List size={22} />
                   {pendingRevisions > 0 && (
                     <span className="absolute -right-2 -top-1 grid size-4 place-items-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-xs">
                       {pendingRevisions}
@@ -287,6 +281,12 @@ export default function Driver({
                   )}
                 </span>
               ),
+              v: { n: "list" } as View,
+            },
+            {
+              k: "riwayat",
+              l: "Riwayat",
+              i: <History size={22} />,
               v: { n: "riwayat" } as View,
             },
             {

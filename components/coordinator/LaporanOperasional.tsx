@@ -23,10 +23,10 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
   const [segments, setSegments] = useState<Segment[]>(isDemo ? SEGMENTS : [])
   const [jalurList, setJalurList] = useState<Jalur[]>(isDemo ? JALUR : [])
 
-  // Cari tanggal keberangkatan terbaru (disetujui atau dikirim)
+  // Cari tanggal keberangkatan terbaru yang sudah disetujui
   const latestDataDate = useMemo(() => {
     const validDates = deps
-      .filter((d) => d.status === "disetujui" || d.status === "dikirim")
+      .filter((d) => d.status === "disetujui")
       .map((d) => d.date)
       .sort((a, b) => b.localeCompare(a))
     return validDates[0] || null
@@ -37,7 +37,7 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
   useEffect(() => {
     if (!hasAutoAdjusted.current && latestDataDate) {
       const currentAnchorHasData = deps.some(
-        (d) => (d.status === "disetujui" || d.status === "dikirim") && d.date === r.anchor,
+        (d) => d.status === "disetujui" && d.date === r.anchor,
       )
       if (!currentAnchorHasData) {
         r.setAnchor(latestDataDate)
@@ -55,7 +55,7 @@ export default function LaporanOperasional({ deps, toast, currentUser }: Props) 
   }, [isDemo])
   const approved = deps.filter(
     (d) =>
-      (d.status === "disetujui" || d.status === "dikirim") &&
+      d.status === "disetujui" &&
       d.date >= r.range[0] &&
       d.date <= r.range[1],
   )

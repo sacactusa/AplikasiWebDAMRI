@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { ChevronRight, Trash2 } from "lucide-react"
+import { AlertCircle, ChevronRight, Trash2 } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { fmtDate, jalur, plat, rupiah, seg } from "@/lib/data"
 import { Btn, Dialog, Field, NumInput, StatusBadge, cx } from "@/components/ui"
@@ -40,7 +40,8 @@ export default function DetailKeberangkatan({
   const [submitting, setSubmitting] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const s = seg(d.segmentId)
-  const ro = dep.status !== "draft"
+  const isRevision = dep.status === "perbaikan" || Boolean(dep.rejectNote)
+  const ro = dep.status === "dikirim" || dep.status === "disetujui"
 
   // Inisialisasi awal tarif berlaku untuk jalur ini (kosong jika belum ada di data master)
   const [tarifItems, setTarifItems] = useState<TarifItem[]>([])
@@ -333,17 +334,23 @@ export default function DetailKeberangkatan({
   return (
     <>
       <TopBar
-        title={ro ? "Detail Keberangkatan" : "Isi Hasil"}
+        title={isRevision ? "Perbaikan Keberangkatan" : ro ? "Detail Keberangkatan" : "Isi Hasil"}
         onBack={onBack}
         detail
       />
       <div ref={ref} className="space-y-4 px-5 py-5">
-        {dep.rejectNote && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <p className="text-sm font-bold text-red-800">
-              Catatan koordinator
+        {isRevision && (
+          <div className="rounded-2xl border border-red-300 bg-red-50/90 p-4 shadow-xs">
+            <div className="flex items-center gap-2 text-sm font-bold text-red-900">
+              <AlertCircle size={18} className="shrink-0 text-red-600" />
+              <span>Catatan Perbaikan dari Koordinator:</span>
+            </div>
+            <p className="mt-2 rounded-xl border border-red-200 bg-white/95 p-3 text-sm font-medium leading-relaxed text-red-950 shadow-2xs">
+              {dep.rejectNote || "Silakan perbaiki data operasional lalu kirim kembali ke koordinator."}
             </p>
-            <p className="mt-1 text-sm text-red-900">{dep.rejectNote}</p>
+            <p className="mt-2.5 text-xs text-red-800">
+              Silakan perbaiki data di bawah, lalu ketuk tombol <b>Kirim Ulang ke Koordinator</b>.
+            </p>
           </div>
         )}
         <div className="rounded-xl bg-navy-50 p-4">
@@ -452,7 +459,7 @@ export default function DetailKeberangkatan({
               </p>
             )}
             <Btn className="h-12 w-full" disabled={offline || submitting} onClick={send}>
-              {submitting ? "Mengirim ke koordinator..." : dep.rejectNote ? "Perbaiki dan kirim ulang" : "Kirim"}
+              {submitting ? "Mengirim ke koordinator..." : isRevision ? "Kirim Ulang ke Koordinator" : "Kirim"}
               <ChevronRight size={18} />
             </Btn>
             {tried && hasErrors && (
@@ -460,15 +467,17 @@ export default function DetailKeberangkatan({
                 Kolom wajib belum terisi lengkap.
               </p>
             )}
-            <Btn
-              variant="outline"
-              className="h-12 w-full"
-              disabled={offline || submitting}
-              onClick={() => onSave(prepare())}
-            >
-              Simpan Draft
-            </Btn>
-            {d.status === "draft" && onDeleteDraft && (
+            {!isRevision && dep.status === "draft" && (
+              <Btn
+                variant="outline"
+                className="h-12 w-full"
+                disabled={offline || submitting}
+                onClick={() => onSave(prepare())}
+              >
+                Simpan Draft
+              </Btn>
+            )}
+            {!isRevision && d.status === "draft" && onDeleteDraft && (
               <button
                 type="button"
                 disabled={submitting}

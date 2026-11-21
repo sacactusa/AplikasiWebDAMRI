@@ -8,6 +8,7 @@ import { OfflineBanner, Toasts, type ToastItem, type ToastType } from "./ui"
 import { INCOMING, ME, SEED, Departure, jalur, uid } from "@/lib/data"
 import type { Role } from "@/types"
 import { getDepartures, approveDeparture } from "@/lib/supabaseService"
+import { supabase } from "@/lib/supabase"
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<{ nama: string; email: string; id?: string } | null>(() => {
@@ -125,16 +126,44 @@ export default function App() {
     }
   }, [role, currentUser?.email, isDemo])
 
-  // Polling data Supabase untuk akun riil agar selalu sinkron
+  // Sinkronisasi realtime Supabase agar aksi sopir & koordinator (kirim, tolak, setujui) langsung sinkron instan
   useEffect(() => {
     if (!role || isDemo || offline) return
-    const interval = setInterval(() => {
-      getDepartures(false).then((live) => {
-        setDeps(live)
+
+    const channelName = "sync_keberangkatan_" + Math.random().toString(36).slice(2, 9)
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "keberangkatan" },
+        () => {
+          getDepartures(false)
+            .then((live) => {
+              setDeps(live)
+            })
+            .catch(() => {})
+        },
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          getDepartures(false).then((live) => setDeps(live)).catch(() => {})
+        }
       })
-    }, 10000)
-    return () => clearInterval(interval)
-  }, [role, isDemo, offline])
+
+    // Polling cepat tiap 2.5 detik untuk menjamin sinkronisasi instan antar tab
+    const interval = setInterval(() => {
+      getDepartures(false)
+        .then((live) => {
+          setDeps(live)
+        })
+        .catch(() => {})
+    }, 2500)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(interval)
+    }
+  }, [role, currentUser?.email, currentUser?.id, isDemo, offline])
 
 
 

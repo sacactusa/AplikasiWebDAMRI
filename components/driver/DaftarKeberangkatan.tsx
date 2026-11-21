@@ -32,7 +32,7 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
 
   // Hitung jumlah keberangkatan berdasarkan masing-masing status
   const draftCount = useMemo(
-    () => mine.filter((d) => d.status === "draft" && !d.rejectNote).length,
+    () => mine.filter((d) => d.status === "draft").length,
     [mine],
   )
   const sentCount = useMemo(
@@ -40,7 +40,7 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
     [mine],
   )
   const revCount = useMemo(
-    () => mine.filter((d) => Boolean(d.rejectNote)).length,
+    () => mine.filter((d) => d.status === "perbaikan" || Boolean(d.rejectNote)).length,
     [mine],
   )
   const accCount = useMemo(
@@ -61,9 +61,9 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
   const list = useMemo(() => {
     return mine.filter((d) => {
       if (f === "all") return true
-      if (f === "draft") return d.status === "draft" && !d.rejectNote
+      if (f === "draft") return d.status === "draft"
       if (f === "dikirim") return d.status === "dikirim"
-      if (f === "revisi") return Boolean(d.rejectNote)
+      if (f === "revisi") return d.status === "perbaikan" || Boolean(d.rejectNote)
       if (f === "disetujui") return d.status === "disetujui"
       return true
     })
@@ -327,6 +327,34 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
         ))}
       </div>
 
+      {/* Banner Perlu Perbaikan (Jika ada keberangkatan yang dikembalikan koordinator) */}
+      {revCount > 0 && f !== "revisi" && (
+        <div className="px-5 pt-3">
+          <div
+            role="button"
+            onClick={() => setF("revisi")}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50/90 p-3.5 text-left shadow-xs transition hover:bg-red-100/90 cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-red-600 text-white">
+                <AlertCircle size={16} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-red-950">
+                  {revCount} keberangkatan perlu perbaikan
+                </p>
+                <p className="truncate text-[11px] text-red-700">
+                  Koordinator meminta data diperbaiki dan dikirim ulang.
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 rounded-lg bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs">
+              Lihat
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Daftar Keberangkatan */}
       {list.length === 0 ? (
         <Empty
@@ -366,7 +394,7 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
                   onClick={() => onOpen(d.id)}
                   className={cx(
                     "w-full rounded-xl border border-line border-l-4 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer",
-                    d.rejectNote
+                    d.status === "perbaikan" || d.rejectNote
                       ? "border-l-red-500 bg-red-50/15"
                       : d.status === "draft"
                         ? "border-l-slate-300"
@@ -398,14 +426,14 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
                     </p>
                   )}
 
-                  {d.rejectNote && (
+                  {(d.status === "perbaikan" || d.rejectNote) && (
                     <p className="mt-3 line-clamp-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                      <b>Catatan perbaikan:</b> {d.rejectNote}
+                      <b>Catatan perbaikan:</b> {d.rejectNote || "Perlu perbaikan data operasional"}
                     </p>
                   )}
 
                   <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
-                    {d.status === "draft" && onDeleteDraft ? (
+                    {d.status === "draft" && !d.rejectNote && onDeleteDraft ? (
                       <span
                         role="button"
                         onClick={(e) => {
@@ -416,6 +444,11 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
                       >
                         <Trash2 size={13} />
                         <span>Hapus Draft</span>
+                      </span>
+                    ) : d.rejectNote ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600">
+                        <AlertCircle size={13} />
+                        <span>Perlu Diperbaiki</span>
                       </span>
                     ) : (
                       <span className="text-xs text-mute">Pendapatan</span>

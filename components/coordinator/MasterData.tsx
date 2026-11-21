@@ -1675,7 +1675,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                           </td>
                           <td className={cx(tdCls, "font-medium text-slate-800")}>{j.nama}</td>
                           <td className={cx(tdCls, "w-52 sm:w-64 whitespace-nowrap text-xs")}>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3.5">
+                            <div className="flex items-center gap-3 sm:gap-4">
                               <span className="font-medium text-ink">
                                 Tempuh: {j.kmTempuh != null && Number(j.kmTempuh) > 0 ? `${j.kmTempuh} km` : "–"}
                               </span>

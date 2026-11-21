@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Check, ChevronRight, Download, LayoutDashboard, X } from "lucide-react"
+import { AlertCircle, Check, ChevronRight, CrossIcon, Download, LayoutDashboard, X, XIcon } from "lucide-react"
 import type { Departure, Segment, Jalur } from "@/lib/data"
 import {
   DRIVERS,
@@ -103,14 +103,16 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
   const allSel = rows.length > 0 && selIds.length === rows.length
   const scoped = !!(fd || fj)
 
-  const approve = (ids: string[]) => {
+  const approve = async (ids: string[]) => {
     setDeps((p) =>
       p.map((d) =>
-        ids.includes(d.id) ? { ...d, status: "disetujui", isNew: false } : d,
+        ids.includes(d.id) ? { ...d, status: "disetujui", rejectNote: undefined, isNew: false } : d,
       ),
     )
     if (!isDemo) {
-      ids.forEach((id) => approveDeparture(id, "Koordinator"))
+      await Promise.all(
+        ids.map((id) => approveDeparture(id, currentUser?.nama || "Koordinator")),
+      )
     }
     setSel((s) => s.filter((x) => !ids.includes(x)))
     setOpen(null)
@@ -118,23 +120,27 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
       ids.length === 1
         ? "Keberangkatan disetujui"
         : `${ids.length} keberangkatan disetujui`,
+      "success",
     )
   }
-  const reject = () => {
+  const reject = async () => {
+    const targetId = rej
+    if (!targetId) return
+    const noteText = note.trim()
     setDeps((p) =>
       p.map((d) =>
-        d.id === rej
-          ? { ...d, status: "draft", rejectNote: note.trim(), isNew: false }
+        d.id === targetId
+          ? { ...d, status: "perbaikan", rejectNote: noteText, isNew: false }
           : d,
       ),
     )
-    if (!isDemo && rej) {
-      rejectDeparture(rej, note.trim(), "Koordinator")
+    if (!isDemo) {
+      await rejectDeparture(targetId, noteText, currentUser?.nama || "Koordinator")
     }
     setRej(null)
     setOpen(null)
     setNote("")
-    toast("Keberangkatan ditolak & dikembalikan ke draft", "error")
+    toast("Catatan perbaikan berhasil dikirim ke sopir!", "success")
   }
   const detail = deps.find((d) => d.id === open)
 
@@ -168,7 +174,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           ],
           [
             "Dikembalikan",
-            deps.filter((d) => d.status === "draft" && d.rejectNote).length,
+            deps.filter((d) => d.status === "perbaikan" || Boolean(d.rejectNote)).length,
             "text-red-700",
           ],
         ].map(([l, n, c]) => (
@@ -340,6 +346,11 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
                           BARU
                         </span>
                       )}
+                      {d.isRevised && !d.isNew && (
+                        <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 font-sans text-[10px] font-bold text-sky-800">
+                          PERBAIKAN
+                        </span>
+                      )}
                     </td>
                     <td className={td}>{d.driver}</td>
                     <td className={td}>{segmentObj.nama}</td>
@@ -416,7 +427,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
                   setRej(detail.id)
                 }}
               >
-                <X size={16} /> Tolak
+                <XIcon size={16} /> Tolak
               </Btn>
               <Btn
                 variant="ok"
@@ -466,7 +477,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
 
       <Dialog
         open={!!rej}
-        title="Tolak keberangkatan"
+        title="Tolak Laporan Keberangkatan"
         onClose={() => setRej(null)}
         actions={
           <>
@@ -474,12 +485,12 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
               Batal
             </Btn>
             <Btn variant="danger" disabled={!note.trim()} onClick={reject}>
-              Tolak & kembalikan
+              Kirim Perbaikan ke Sopir
             </Btn>
           </>
         }
       >
-        <Field label="Catatan penolakan (wajib)">
+        <Field label="Catatan perbaikan (wajib)">
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -657,6 +668,18 @@ function DetailBody({
           {fmtDate(d.date)} · {d.time}
         </span>
       </div>
+
+      {d.isRevised && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/90 p-3.5 shadow-2xs">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-sky-900">
+            <span className="size-2 rounded-full bg-sky-600 animate-pulse" />
+            <span>Laporan Hasil Perbaikan Sopir</span>
+          </div>
+          <p className="mt-1 text-xs text-sky-800 leading-relaxed">
+            Sopir telah mengirimkan data perbaikan. Anda dapat menyetujui laporan ini atau menekan tombol <b>Tolak</b> kembali jika masih terdapat data yang belum sesuai.
+          </p>
+        </div>
+      )}
 
       {d.rejectNote && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3.5">

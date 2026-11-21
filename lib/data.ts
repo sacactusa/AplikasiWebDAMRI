@@ -1,4 +1,4 @@
-export type Status = 'draft' | 'dikirim' | 'disetujui'
+export type Status = 'draft' | 'dikirim' | 'disetujui' | 'perbaikan'
 
 export interface Segment {
   id: string
@@ -50,6 +50,7 @@ export interface Departure {
   status: Status
   rejectNote?: string
   isNew?: boolean
+  isRevised?: boolean
   passengerCounts?: Record<string, number>
 }
 

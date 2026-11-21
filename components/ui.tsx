@@ -18,16 +18,30 @@ export function StatusBadge({
   rejected?: boolean
   label?: string
 }) {
-  const map = {
+  const map: Record<Status, readonly [string, string]> = {
     draft: ["Draft", "bg-slate-100 text-slate-700 border-slate-200"],
     dikirim: ["Dikirim", "bg-amber-50 text-amber-800 border-amber-300"],
     disetujui: [
       "Disetujui",
       "bg-emerald-50 text-emerald-800 border-emerald-300",
     ],
-  } as const
-  const [defaultLabel, cls] = map[status]
-  const label = customLabel ?? defaultLabel
+    perbaikan: [
+      "Perlu perbaikan",
+      "bg-red-50 text-red-700 border-red-200",
+    ],
+  }
+  const [defaultLabel, cls] = map[status] || ["Draft", "bg-slate-100 text-slate-700 border-slate-200"]
+  const label = customLabel ?? (rejected || status === "perbaikan" ? "Perlu perbaikan" : defaultLabel)
+
+  // Jika perlu perbaikan, jangan tampilkan label "Draft" agar pengguna tidak bingung
+  if (rejected || status === "perbaikan") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 shadow-2xs">
+        Perlu perbaikan
+      </span>
+    )
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <span
@@ -39,11 +53,6 @@ export function StatusBadge({
         {status === "disetujui" && <Lock size={11} />}
         {label}
       </span>
-      {rejected && (
-        <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 shadow-2xs">
-          Perlu perbaikan
-        </span>
-      )}
     </span>
   )
 }

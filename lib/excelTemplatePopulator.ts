@@ -897,10 +897,10 @@ export async function createDamriExcelWorkbook(
   segments: Segment[] = SEGMENTS,
   jalurList: Jalur[] = JALUR
 ): Promise<ExcelJS.Workbook> {
-  // Ambil keberangkatan yang valid (disetujui atau dikirim)
+  // Ambil keberangkatan yang valid (hanya yang sudah disetujui koordinator)
   const reportDepartures = departures.filter(
     (d) =>
-      (d.status === "disetujui" || d.status === "dikirim") &&
+      d.status === "disetujui" &&
       (!startDate || d.date >= startDate) &&
       (!endDate || d.date <= endDate)
   )

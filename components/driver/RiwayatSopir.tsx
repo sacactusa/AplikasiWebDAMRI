@@ -73,8 +73,9 @@ export default function RiwayatSopir({ mine, nama, onOpen }: Props) {
   const filteredList = useMemo(() => {
     return mine
       .filter((d) => {
-        // Keberangkatan yang masih menunggu persetujuan berada di laman Keberangkatan, bukan Riwayat
+        // Keberangkatan draft murni dan yang sedang menunggu persetujuan berada di laman Keberangkatan, bukan Riwayat
         if (d.status === "dikirim") return false
+        if (d.status === "draft" && !d.rejectNote) return false
 
         // Filter rentang tanggal kalender
         if (startDate && d.date < startDate) return false
@@ -82,7 +83,7 @@ export default function RiwayatSopir({ mine, nama, onOpen }: Props) {
 
         // Filter status / notifikasi
         if (statusFilter === "disetujui") return d.status === "disetujui"
-        if (statusFilter === "revisi") return Boolean(d.rejectNote)
+        if (statusFilter === "revisi") return d.status === "perbaikan" || Boolean(d.rejectNote)
 
         return true
       })
@@ -99,13 +100,14 @@ export default function RiwayatSopir({ mine, nama, onOpen }: Props) {
   const metrics = useMemo(() => {
     const inRange = mine.filter((d) => {
       if (d.status === "dikirim") return false
+      if (d.status === "draft" && !d.rejectNote) return false
       if (startDate && d.date < startDate) return false
       if (endDate && d.date > endDate) return false
       return true
     })
 
     const acc = inRange.filter((d) => d.status === "disetujui")
-    const rev = inRange.filter((d) => Boolean(d.rejectNote))
+    const rev = inRange.filter((d) => d.status === "perbaikan" || Boolean(d.rejectNote))
 
     const totalPendapatanAcc = acc.reduce(
       (sum, d) => sum + (calc(d).total || 0),
@@ -358,7 +360,7 @@ export default function RiwayatSopir({ mine, nama, onOpen }: Props) {
           {filteredList.map((d) => {
             const c = calc(d)
             const isApproved = d.status === "disetujui"
-            const isRevision = Boolean(d.rejectNote)
+            const isRevision = d.status === "perbaikan" || Boolean(d.rejectNote)
 
             return (
               <li key={d.id}>

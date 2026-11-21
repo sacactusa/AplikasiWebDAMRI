@@ -198,27 +198,34 @@ export async function getDepartures(isDemo = false): Promise<Departure[]> {
       return []
     }
 
-    return data.map((r: any): Departure => ({
-      id: r.id,
-      date: r.tanggal,
-      time: typeof r.jam === "string" ? r.jam.slice(0, 5) : r.jam,
-      segmentId: r.segmen?.kode || r.segmen_id,
-      jalurId: r.jalur_id,
-      jalurNama: r.jalur?.nama || undefined,
-      cb: r.kendaraan?.plat || r.kendaraan_id || "D 7021 AB",
-      driver: r.sopir?.nama || "Sopir",
-      driverId: r.sopir?.id || r.sopir_id,
-      driverEmail: r.sopir?.email,
-      kmTempuh: r.km_tempuh != null ? Number(r.km_tempuh) : null,
-      kmEmpty: r.km_empty != null ? Number(r.km_empty) : null,
-      penumpang: r.penumpang != null ? Number(r.penumpang) : null,
-      pm: r.pm != null ? Number(r.pm) : null,
-      pendapatan: r.pendapatan != null ? Number(r.pendapatan) : null,
-      subsidi: r.subsidi != null ? Number(r.subsidi) : null,
-      bagasi: r.bagasi != null ? Number(r.bagasi) : null,
-      status: (r.status as Departure["status"]) || "draft",
-      rejectNote: r.catatan_penolakan || undefined,
-    }))
+    return data.map((r: any): Departure => {
+      const rawStatus = (r.status as Departure["status"]) || "draft"
+      const isPerbaikan = (rawStatus === "draft" && Boolean(r.catatan_penolakan)) || Boolean(r.ditolak_at && rawStatus === "draft")
+      const finalStatus: Departure["status"] = isPerbaikan ? "perbaikan" : rawStatus
+
+      return {
+        id: r.id,
+        date: r.tanggal,
+        time: typeof r.jam === "string" ? r.jam.slice(0, 5) : r.jam,
+        segmentId: r.segmen?.kode || r.segmen_id,
+        jalurId: r.jalur_id,
+        jalurNama: r.jalur?.nama || undefined,
+        cb: r.kendaraan?.plat || r.kendaraan_id || "D 7021 AB",
+        driver: r.sopir?.nama || "Sopir",
+        driverId: r.sopir?.id || r.sopir_id,
+        driverEmail: r.sopir?.email,
+        kmTempuh: r.km_tempuh != null ? Number(r.km_tempuh) : null,
+        kmEmpty: r.km_empty != null ? Number(r.km_empty) : null,
+        penumpang: r.penumpang != null ? Number(r.penumpang) : null,
+        pm: r.pm != null ? Number(r.pm) : null,
+        pendapatan: r.pendapatan != null ? Number(r.pendapatan) : null,
+        subsidi: r.subsidi != null ? Number(r.subsidi) : null,
+        bagasi: r.bagasi != null ? Number(r.bagasi) : null,
+        status: finalStatus,
+        rejectNote: r.catatan_penolakan || undefined,
+        isRevised: Boolean(r.ditolak_at && r.status === "dikirim"),
+      }
+    })
   } catch (err) {
     console.warn("Gagal mengambil keberangkatan dari Supabase:", err)
     return []
@@ -418,6 +425,7 @@ export async function updateDeparture(
       }
     }
 
+    const dbStatus = d.status === "perbaikan" ? "draft" : d.status
     const payload: Record<string, any> = {
       km_tempuh: finalKmTempuh != null ? finalKmTempuh : (isDikirim ? 0 : null),
       km_empty: finalKmEmpty != null ? finalKmEmpty : (isDikirim ? 0 : null),
@@ -426,8 +434,8 @@ export async function updateDeparture(
       pendapatan: d.pendapatan != null ? Number(d.pendapatan) : (isDikirim ? 0 : null),
       subsidi: d.subsidi != null ? Number(d.subsidi) : (isDikirim ? 0 : null),
       bagasi: d.bagasi != null ? Number(d.bagasi) : (isDikirim ? 0 : null),
-      status: d.status,
-      catatan_penolakan: d.rejectNote || null,
+      status: dbStatus,
+      catatan_penolakan: isDikirim ? null : (d.rejectNote || null),
       updated_at: new Date().toISOString(),
     }
     if (isDikirim) {
@@ -523,6 +531,8 @@ export async function approveDeparture(
       .from("keberangkatan")
       .update({
         status: "disetujui",
+        catatan_penolakan: null,
+        ditolak_at: null,
         disetujui_at: now,
         updated_at: now,
       })
@@ -566,6 +576,7 @@ export async function rejectDeparture(
         status: "draft",
         catatan_penolakan: note,
         ditolak_at: now,
+        disetujui_at: null,
         updated_at: now,
       })
       .eq("id", id)
@@ -582,7 +593,7 @@ export async function rejectDeparture(
       record_id: id,
       objek: `keberangkatan · ${id}`,
       sebelum: { status: "dikirim" },
-      sesudah: { status: "draft", catatan: note },
+      sesudah: { status: "perbaikan", catatan: note },
     })
 
     return true
