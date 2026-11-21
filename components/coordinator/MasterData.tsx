@@ -1314,11 +1314,11 @@ export default function MasterData({ toast, currentUser }: Props) {
             : !!f("tarif") && !!f("jalurId")
 
   const thCls =
-    "whitespace-nowrap px-3.5 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-mute sm:px-4"
+    "whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-mute sm:px-4 sm:py-3"
   const thCenter =
-    "whitespace-nowrap px-3.5 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-mute sm:px-4"
-  const tdCls = "px-3.5 py-3 text-sm sm:px-4"
-  const tdCenter = "px-3.5 py-3 text-center text-sm sm:px-4"
+    "whitespace-nowrap px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-mute sm:px-4 sm:py-3"
+  const tdCls = "px-3 py-2.5 text-xs sm:text-sm sm:px-4 sm:py-3"
+  const tdCenter = "px-3 py-2.5 text-center text-xs sm:text-sm sm:px-4 sm:py-3"
 
   const Aksi = ({
     rowKey,
@@ -1337,7 +1337,7 @@ export default function MasterData({ toast, currentUser }: Props) {
     labelEdit?: string
     labelDelete?: string
   }) => (
-    <td className={cx(tdCenter, "w-28 whitespace-nowrap", activeMenuId === rowKey && "relative z-30")}>
+    <td className={cx(tdCenter, "w-20 sm:w-28 whitespace-nowrap", activeMenuId === rowKey && "relative z-30")}>
       <div className={cx("relative inline-block text-left", activeMenuId === rowKey && "z-30")}>
         <button
           type="button"
@@ -1355,13 +1355,13 @@ export default function MasterData({ toast, currentUser }: Props) {
             }
           }}
           className={cx(
-            "inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-wash focus:outline-hidden",
+            "inline-flex items-center gap-1 sm:gap-1.5 rounded-lg border border-line bg-white px-2 py-1 sm:px-2.5 sm:py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-wash focus:outline-hidden",
             activeMenuId === rowKey && "border-navy/30 bg-wash ring-1 ring-navy/20",
           )}
         >
           <span>Aksi</span>
           <ChevronDown
-            size={13}
+            size={12}
             className={cx(
               "text-mute transition-transform duration-150",
               activeMenuId === rowKey && "rotate-180",
@@ -1492,36 +1492,38 @@ export default function MasterData({ toast, currentUser }: Props) {
       >
         Data Master
       </Title>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div
-          role="tablist"
-          className="inline-flex rounded-lg border border-line bg-wash p-1"
-        >
-          {(["Segmen", "Jalur", "Tarif", "Kendaraan", "Penumpang"] as const).map((m) => (
-            <button
-              key={m}
-              role="tab"
-              aria-selected={tab === m}
-              onClick={() => setTab(m)}
-              className={cx(
-                "h-9 rounded-md px-3.5 text-sm font-semibold",
-                tab === m ? "bg-white text-navy shadow-sm" : "text-mute",
-              )}
-            >
-              {m}
-            </button>
-          ))}
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="w-full overflow-x-auto pb-1 sm:pb-0 scrollbar-none sm:w-auto">
+          <div
+            role="tablist"
+            className="inline-flex min-w-max items-center rounded-lg border border-line bg-wash p-1"
+          >
+            {(["Segmen", "Jalur", "Tarif", "Kendaraan", "Penumpang"] as const).map((m) => (
+              <button
+                key={m}
+                role="tab"
+                aria-selected={tab === m}
+                onClick={() => setTab(m)}
+                className={cx(
+                  "h-8 sm:h-9 rounded-md px-3 sm:px-3.5 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap",
+                  tab === m ? "bg-white text-navy shadow-sm" : "text-mute hover:text-ink",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
         </div>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Cari…"
-          className={cx(inputCls(), "h-11 w-full sm:w-64")}
+          placeholder={`Cari ${tab.toLowerCase()}…`}
+          className={cx(inputCls(), "h-10 sm:h-11 w-full sm:w-64 text-sm")}
         />
       </div>
 
       {tab === "Tarif" && (
-        <p className="mb-3 rounded-lg bg-navy-50 px-4 py-3 text-sm text-navy">
+        <p className="mb-3 rounded-lg bg-navy-50 px-4 py-3 text-xs sm:text-sm text-navy">
           Tarif baru berlaku mulai tanggal yang dipilih dan tidak mengubah
           laporan lama.
         </p>
@@ -1542,10 +1544,10 @@ export default function MasterData({ toast, currentUser }: Props) {
           className={cx(
             "w-full text-left",
             tab === "Tarif"
-              ? "min-w-[840px]"
+              ? "min-w-[620px] sm:min-w-[760px]"
               : tab === "Jalur"
-                ? "min-w-[760px]"
-                : "min-w-[540px]",
+                ? "min-w-[500px] sm:min-w-[640px]"
+                : "min-w-full sm:min-w-[420px]",
           )}
         >
           <thead className="border-b border-line bg-wash">
@@ -1553,42 +1555,42 @@ export default function MasterData({ toast, currentUser }: Props) {
               {tab === "Segmen" && (
                 <>
                   <th className={thCls}>Segmen</th>
-                  <th className={cx(thCenter, "w-28 sm:w-32")}>Status</th>
-                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                  <th className={cx(thCenter, "w-24 sm:w-32")}>Status</th>
+                  <th className={cx(thCenter, "w-20 sm:w-28")}>Aksi</th>
                 </>
               )}
               {tab === "Jalur" && (
                 <>
-                  <th className={cx(thCls, "w-44 sm:w-56 whitespace-nowrap")}>Segmen</th>
+                  <th className={cx(thCls, "w-28 sm:w-48 whitespace-nowrap")}>Segmen</th>
                   <th className={thCls}>Jalur</th>
-                  <th className={cx(thCls, "w-52 sm:w-64 whitespace-nowrap")}>Jarak</th>
-                  <th className={cx(thCenter, "w-28 sm:w-36")}>Status</th>
-                  <th className={cx(thCenter, "w-28 sm:w-32")}>Aksi</th>
+                  <th className={cx(thCls, "w-32 sm:w-56 whitespace-nowrap")}>Jarak</th>
+                  <th className={cx(thCenter, "w-20 sm:w-28")}>Status</th>
+                  <th className={cx(thCenter, "w-20 sm:w-28")}>Aksi</th>
                 </>
               )}
               {tab === "Tarif" && (
                 <>
-                  <th className={cx(thCls, "w-32 sm:w-40")}>Segmen</th>
+                  <th className={cx(thCls, "w-24 sm:w-36")}>Segmen</th>
                   <th className={thCls}>Jalur</th>
-                  <th className={cx(thCls, "w-36 sm:w-44 whitespace-nowrap")}>Jenis Penumpang</th>
-                  <th className={cx(thCls, "w-28 sm:w-32 whitespace-nowrap")}>Tarif</th>
-                  <th className={cx(thCls, "w-28 sm:w-32 whitespace-nowrap")}>Berlaku mulai</th>
-                  <th className={cx(thCenter, "w-24 sm:w-28")}>Keterangan</th>
-                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                  <th className={cx(thCls, "w-28 sm:w-40 whitespace-nowrap")}>Jenis Penumpang</th>
+                  <th className={cx(thCls, "w-24 sm:w-28 whitespace-nowrap")}>Tarif</th>
+                  <th className={cx(thCls, "w-24 sm:w-28 whitespace-nowrap")}>Berlaku mulai</th>
+                  <th className={cx(thCenter, "w-20 sm:w-24")}>Keterangan</th>
+                  <th className={cx(thCenter, "w-20 sm:w-28")}>Aksi</th>
                 </>
               )}
               {tab === "Kendaraan" && (
                 <>
                   <th className={thCls}>Plat Nomor</th>
-                  <th className={cx(thCenter, "w-28 sm:w-32")}>Status</th>
-                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                  <th className={cx(thCenter, "w-24 sm:w-32")}>Status</th>
+                  <th className={cx(thCenter, "w-20 sm:w-28")}>Aksi</th>
                 </>
               )}
               {tab === "Penumpang" && (
                 <>
                   <th className={thCls}>Jenis Penumpang</th>
-                  <th className={cx(thCenter, "w-28 sm:w-32")}>Status</th>
-                  <th className={cx(thCenter, "w-28")}>Aksi</th>
+                  <th className={cx(thCenter, "w-24 sm:w-32")}>Status</th>
+                  <th className={cx(thCenter, "w-20 sm:w-28")}>Aksi</th>
                 </>
               )}
             </tr>
@@ -1624,7 +1626,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                         return (
                           <tr key={s.id} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
                             <td className={cx(tdCls, "font-medium text-ink")}>{s.nama}</td>
-                            <td className={cx(tdCenter, "w-28 sm:w-32")}>{aktifBadge(s.aktif)}</td>
+                            <td className={cx(tdCenter, "w-24 sm:w-32")}>{aktifBadge(s.aktif)}</td>
                             <Aksi
                               rowKey={`seg_${s.id}`}
                               aktif={s.aktif}
@@ -1670,21 +1672,21 @@ export default function MasterData({ toast, currentUser }: Props) {
                       .filter((j) => has(j.nama + (segs.find((s) => s.id === j.segmentId)?.nama || "")))
                       .map((j, i, arr) => (
                         <tr key={j.id} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
-                          <td className={cx(tdCls, "w-44 sm:w-56 whitespace-nowrap font-semibold text-ink")}>
+                          <td className={cx(tdCls, "w-28 sm:w-48 whitespace-nowrap font-semibold text-ink")}>
                             {segs.find((s) => s.id === j.segmentId)?.nama || seg(j.segmentId).nama}
                           </td>
                           <td className={cx(tdCls, "font-medium text-slate-800")}>{j.nama}</td>
-                          <td className={cx(tdCls, "w-52 sm:w-64 whitespace-nowrap text-xs")}>
-                            <div className="flex items-center gap-3 sm:gap-4">
-                              <span className="font-medium text-ink">
+                          <td className={cx(tdCls, "w-32 sm:w-56 whitespace-nowrap text-xs")}>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-3.5">
+                              <span className="font-semibold sm:font-medium text-ink whitespace-nowrap">
                                 Tempuh: {j.kmTempuh != null && Number(j.kmTempuh) > 0 ? `${j.kmTempuh} km` : "–"}
                               </span>
-                              <span className="font-medium text-mute">
+                              <span className="text-[11px] sm:text-xs font-medium text-mute whitespace-nowrap">
                                 Empty: {j.kmEmpty != null && Number(j.kmEmpty) > 0 ? `${j.kmEmpty} km` : "–"}
                               </span>
                             </div>
                           </td>
-                          <td className={cx(tdCenter, "w-28 sm:w-36")}>{aktifBadge(j.aktif)}</td>
+                          <td className={cx(tdCenter, "w-20 sm:w-28")}>{aktifBadge(j.aktif)}</td>
                           <Aksi
                             rowKey={`jal_${j.id}`}
                             aktif={j.aktif}
@@ -1774,16 +1776,16 @@ export default function MasterData({ toast, currentUser }: Props) {
 
                       return (
                         <tr key={x.id || `tar_${x.jalurId}_${x.mulai}_${i}`} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
-                          <td className={cx(tdCls, "w-32 sm:w-40 font-semibold text-ink")}>{segNama}</td>
+                          <td className={cx(tdCls, "w-24 sm:w-36 font-semibold text-ink")}>{segNama}</td>
                           <td className={cx(tdCls, "font-medium text-slate-800")}>{jalurNama}</td>
-                          <td className={cx(tdCls, "w-36 sm:w-44 whitespace-nowrap text-slate-700 font-medium")}>
-                            <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-800">
+                          <td className={cx(tdCls, "w-28 sm:w-40 whitespace-nowrap text-slate-700 font-medium")}>
+                            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">
                               {paxNama}
                             </span>
                           </td>
-                          <td className={cx(tdCls, "w-28 sm:w-32 whitespace-nowrap num font-semibold text-navy")}>{rupiah(x.tarif)}</td>
-                          <td className={cx(tdCls, "w-28 sm:w-32 whitespace-nowrap num text-slate-600")}>{fmtDate(x.mulai)}</td>
-                          <td className={cx(tdCenter, "w-24 sm:w-28")}>
+                          <td className={cx(tdCls, "w-24 sm:w-28 whitespace-nowrap num font-semibold text-navy")}>{rupiah(x.tarif)}</td>
+                          <td className={cx(tdCls, "w-24 sm:w-28 whitespace-nowrap num text-slate-600")}>{fmtDate(x.mulai)}</td>
+                          <td className={cx(tdCenter, "w-20 sm:w-24")}>
                             {arr.find((y) => y.jalurId === x.jalurId && (y.jenisPenumpangId || "umum") === (x.jenisPenumpangId || "umum"))?.mulai ===
                             x.mulai ? (
                               <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
@@ -1840,7 +1842,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                       .map((v, i, arr) => (
                         <tr key={v.rawId || v.plat || v.cb} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
                           <td className={cx(tdCls, "num font-medium text-slate-800")}>{v.plat}</td>
-                          <td className={cx(tdCenter, "w-28 sm:w-32")}>{aktifBadge(v.aktif)}</td>
+                          <td className={cx(tdCenter, "w-24 sm:w-32")}>{aktifBadge(v.aktif)}</td>
                           <Aksi
                             rowKey={`veh_${v.rawId || v.plat || v.cb}`}
                             aktif={v.aktif}
@@ -1885,7 +1887,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                       .map((p, i, arr) => (
                         <tr key={p.id || p.nama} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
                           <td className={cx(tdCls, "font-medium text-slate-800")}>{p.nama}</td>
-                          <td className={cx(tdCenter, "w-28 sm:w-32")}>{aktifBadge(p.aktif)}</td>
+                          <td className={cx(tdCenter, "w-24 sm:w-32")}>{aktifBadge(p.aktif)}</td>
                           <Aksi
                             rowKey={`pax_${p.id || i}`}
                             aktif={p.aktif}

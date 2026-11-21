@@ -36,12 +36,12 @@ export function Title({
   right?: ReactNode
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-4 sm:mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="font-serif text-4xl leading-none sm:text-5xl">
+        <h1 className="font-serif text-2xl sm:text-4xl leading-tight sm:leading-none">
           {children}
         </h1>
-        {sub && <p className="mt-2 text-sm text-mute">{sub}</p>}
+        {sub && <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-mute">{sub}</p>}
       </div>
       {right}
     </div>
