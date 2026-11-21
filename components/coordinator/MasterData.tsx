@@ -200,11 +200,31 @@ export default function MasterData({ toast, currentUser }: Props) {
     const target = deleteTarget
 
     if (isDemo) {
-      if (target.type === "Segmen") setSegs((p) => p.filter((s) => s.id !== target.id))
-      else if (target.type === "Jalur") setJals((p) => p.filter((j) => j.id !== target.id))
-      else if (target.type === "Kendaraan") setVehs((p) => p.filter((v) => v.cb !== target.id))
-      else if (target.type === "Penumpang") setPaxs((p) => p.filter((x) => x.id !== target.id))
-      else if (target.type === "Tarif") {
+      if (target.type === "Segmen") {
+        const segId = target.id
+        const segRawId = target.extra?.rawId
+        const matchingJalurIds = jals
+          .filter((j) => j.segmentId === segId || (segRawId && j.segmentId === segRawId))
+          .map((j) => j.id)
+
+        setSegs((p) => p.filter((s) => s.id !== segId && (!segRawId || s.rawId !== segRawId)))
+        setJals((p) =>
+          p.filter(
+            (j) =>
+              !matchingJalurIds.includes(j.id) &&
+              j.segmentId !== segId &&
+              (!segRawId || j.segmentId !== segRawId),
+          ),
+        )
+        setTarifs((p) => p.filter((t) => !matchingJalurIds.includes(t.jalurId)))
+      } else if (target.type === "Jalur") {
+        setJals((p) => p.filter((j) => j.id !== target.id))
+        setTarifs((p) => p.filter((t) => t.jalurId !== target.id))
+      } else if (target.type === "Kendaraan") {
+        setVehs((p) => p.filter((v) => v.cb !== target.id && v.plat !== target.id))
+      } else if (target.type === "Penumpang") {
+        setPaxs((p) => p.filter((x) => x.id !== target.id && x.nama !== target.name))
+      } else if (target.type === "Tarif") {
         setTarifs((p) =>
           target.extra?.id
             ? p.filter((t) => t.id !== target.extra.id)
@@ -218,80 +238,147 @@ export default function MasterData({ toast, currentUser }: Props) {
 
     try {
       if (target.type === "Segmen") {
+        const segObj = segs.find(
+          (s) => s.id === target.id || (target.extra?.rawId && s.rawId === target.extra.rawId),
+        )
+        const segRawId =
+          segObj?.rawId ||
+          target.extra?.rawId ||
+          (UUID_REGEX.test(target.id) ? target.id : null)
+        const segCode = segObj?.id || target.id
+
+        // 1. Kumpulkan semua jalur terkait segmen ini (dari state & database)
+        const jalurIds: string[] = []
+        jals.forEach((j) => {
+          if (
+            j.segmentId === segCode ||
+            (segRawId && j.segmentId === segRawId) ||
+            j.segmentId === target.id
+          ) {
+            if (!jalurIds.includes(j.id)) jalurIds.push(j.id)
+          }
+        })
+
+        if (segRawId) {
+          const { data: dbJals } = await supabase
+            .from("jalur")
+            .select("id")
+            .eq("segmen_id", segRawId)
+          if (dbJals) {
+            dbJals.forEach((dj) => {
+              if (!jalurIds.includes(dj.id)) jalurIds.push(dj.id)
+            })
+          }
+        }
+
+        // 2. Cascade: Hapus semua tarif_jalur yang terhubung dengan jalur-jalur ini
+        if (jalurIds.length > 0) {
+          await supabase.from("tarif_jalur").delete().in("jalur_id", jalurIds)
+        }
+
+        // 3. Cascade: Hapus keberangkatan terkait segmen / jalur ini agar constraint FK bersih
+        if (segRawId) {
+          await supabase.from("keberangkatan").delete().eq("segmen_id", segRawId)
+        }
+        if (jalurIds.length > 0) {
+          await supabase.from("keberangkatan").delete().in("jalur_id", jalurIds)
+        }
+
+        // 4. Cascade: Hapus semua jalur milik segmen ini
+        if (jalurIds.length > 0) {
+          await supabase.from("jalur").delete().in("id", jalurIds)
+        }
+        if (segRawId) {
+          await supabase.from("jalur").delete().eq("segmen_id", segRawId)
+        }
+
+        // 5. Hapus segmen
         let q
-        if (target.extra?.rawId && UUID_REGEX.test(target.extra.rawId)) {
-          q = supabase.from("segmen").delete().eq("id", target.extra.rawId)
-        } else if (UUID_REGEX.test(target.id)) {
-          q = supabase.from("segmen").delete().eq("id", target.id)
+        if (segRawId) {
+          q = supabase.from("segmen").delete().eq("id", segRawId)
         } else {
           q = supabase.from("segmen").delete().eq("kode", target.id)
         }
         const { error } = await q
 
         if (error) {
-          if (error.code === "23503") {
-            toast(
-              `Gagal menghapus: Segmen '${target.name}' masih terhubung dengan data jalur operasional. Silakan nonaktifkan saja.`,
-            )
-          } else {
-            toast(`Gagal menghapus segmen: ${error.message}`)
-          }
+          toast(`Gagal menghapus segmen: ${error.message}`)
           setDeleteTarget(null)
           return
         }
 
-        setSegs((p) => p.filter((s) => s.id !== target.id))
-        toast(`Segmen '${target.name}' berhasil dihapus permanen`)
+        // 6. Update local state untuk Segmen, Jalur, dan Tarif
+        setSegs((p) => p.filter((s) => s.id !== target.id && (!segRawId || s.rawId !== segRawId)))
+        setJals((p) =>
+          p.filter(
+            (j) =>
+              !jalurIds.includes(j.id) &&
+              j.segmentId !== segCode &&
+              (!segRawId || j.segmentId !== segRawId),
+          ),
+        )
+        setTarifs((p) => p.filter((t) => !jalurIds.includes(t.jalurId)))
+
+        toast(`Segmen '${target.name}' beserta seluruh jalur & tarif terkait berhasil dihapus`)
         await logAudit({
           user_nama: userNama,
           aksi: "Hapus",
           tabel: "segmen",
-          objek: `segmen · ${target.name}`,
-          sebelum: { id: target.id, nama: target.name },
+          objek: `segmen · ${target.name} (+ ${jalurIds.length} jalur & tarif terkait)`,
+          sebelum: { id: target.id, nama: target.name, jalurIds },
           sesudah: {},
         })
       } else if (target.type === "Jalur") {
-        const { error } = await supabase
-          .from("jalur")
-          .delete()
-          .eq("id", target.id)
+        // 1. Cascade: Hapus semua tarif_jalur milik jalur ini
+        await supabase.from("tarif_jalur").delete().eq("jalur_id", target.id)
+
+        // 2. Cascade: Hapus riwayat keberangkatan terkait jalur ini
+        await supabase.from("keberangkatan").delete().eq("jalur_id", target.id)
+
+        // 3. Hapus jalur
+        const { error } = await supabase.from("jalur").delete().eq("id", target.id)
 
         if (error) {
-          if (error.code === "23503") {
-            toast(
-              `Gagal menghapus: Jalur '${target.name}' memiliki riwayat perjalanan atau tarif. Silakan nonaktifkan saja.`,
-            )
-          } else {
-            toast(`Gagal menghapus jalur: ${error.message}`)
-          }
+          toast(`Gagal menghapus jalur: ${error.message}`)
           setDeleteTarget(null)
           return
         }
 
+        // 4. Update local state untuk Jalur dan Tarif
         setJals((p) => p.filter((j) => j.id !== target.id))
-        toast(`Jalur '${target.name}' berhasil dihapus permanen`)
+        setTarifs((p) => p.filter((t) => t.jalurId !== target.id))
+
+        toast(`Jalur '${target.name}' beserta seluruh tarif terkait berhasil dihapus`)
         await logAudit({
           user_nama: userNama,
           aksi: "Hapus",
           tabel: "jalur",
-          objek: `jalur · ${target.name}`,
+          objek: `jalur · ${target.name} (+ tarif terkait)`,
           sebelum: { id: target.id, nama: target.name },
           sesudah: {},
         })
       } else if (target.type === "Kendaraan") {
+        let vehUuid = UUID_REGEX.test(target.id) ? target.id : null
+        if (!vehUuid) {
+          const { data: vRow } = await supabase
+            .from("kendaraan")
+            .select("id")
+            .eq("plat", target.id)
+            .limit(1)
+          if (vRow?.[0]?.id) vehUuid = vRow[0].id
+        }
+
+        if (vehUuid) {
+          await supabase.from("keberangkatan").delete().eq("kendaraan_id", vehUuid)
+        }
+
         const { error } = await supabase
           .from("kendaraan")
           .delete()
           .or(`plat.eq.${target.id},id.eq.${target.id}`)
 
         if (error) {
-          if (error.code === "23503") {
-            toast(
-              `Gagal menghapus: Kendaraan '${target.name}' memiliki riwayat laporan perjalanan. Silakan nonaktifkan saja.`,
-            )
-          } else {
-            toast(`Gagal menghapus kendaraan: ${error.message}`)
-          }
+          toast(`Gagal menghapus kendaraan: ${error.message}`)
           setDeleteTarget(null)
           return
         }
@@ -337,6 +424,10 @@ export default function MasterData({ toast, currentUser }: Props) {
           sesudah: {},
         })
       } else if (target.type === "Penumpang") {
+        if (UUID_REGEX.test(target.id)) {
+          await supabase.from("tarif_jalur").delete().eq("jenis_penumpang_id", target.id)
+        }
+
         let q
         if (UUID_REGEX.test(target.id)) {
           q = supabase.from("jenis_penumpang").delete().eq("id", target.id)
@@ -363,11 +454,30 @@ export default function MasterData({ toast, currentUser }: Props) {
       }
     } catch (err) {
       console.warn("Gagal hapus data master di Supabase:", err)
-      if (target.type === "Segmen") setSegs((p) => p.filter((s) => s.id !== target.id))
-      else if (target.type === "Jalur") setJals((p) => p.filter((j) => j.id !== target.id))
-      else if (target.type === "Kendaraan") setVehs((p) => p.filter((v) => v.cb !== target.id))
-      else if (target.type === "Penumpang") setPaxs((p) => p.filter((x) => x.id !== target.id))
-      else if (target.type === "Tarif") {
+      if (target.type === "Segmen") {
+        const segId = target.id
+        const segRawId = target.extra?.rawId
+        const matchingJalurIds = jals
+          .filter((j) => j.segmentId === segId || (segRawId && j.segmentId === segRawId))
+          .map((j) => j.id)
+        setSegs((p) => p.filter((s) => s.id !== segId && (!segRawId || s.rawId !== segRawId)))
+        setJals((p) =>
+          p.filter(
+            (j) =>
+              !matchingJalurIds.includes(j.id) &&
+              j.segmentId !== segId &&
+              (!segRawId || j.segmentId !== segRawId),
+          ),
+        )
+        setTarifs((p) => p.filter((t) => !matchingJalurIds.includes(t.jalurId)))
+      } else if (target.type === "Jalur") {
+        setJals((p) => p.filter((j) => j.id !== target.id))
+        setTarifs((p) => p.filter((t) => t.jalurId !== target.id))
+      } else if (target.type === "Kendaraan") {
+        setVehs((p) => p.filter((v) => v.cb !== target.id && v.plat !== target.id))
+      } else if (target.type === "Penumpang") {
+        setPaxs((p) => p.filter((x) => x.id !== target.id && x.nama !== target.name))
+      } else if (target.type === "Tarif") {
         setTarifs((p) =>
           target.extra?.id
             ? p.filter((t) => t.id !== target.extra.id)
@@ -605,7 +715,7 @@ export default function MasterData({ toast, currentUser }: Props) {
         })
 
         setForm(null)
-        toast("Jalur berhasil disimpan ke database")
+        toast("Jalur berhasil disimpan")
         return
       } catch (err: any) {
         console.error("Gagal simpan jalur ke Supabase:", err)
@@ -798,7 +908,7 @@ export default function MasterData({ toast, currentUser }: Props) {
 
         setJals((p) => p.map((j) => (j.id === resolvedJalurId ? { ...j, tarif } : j)))
         setForm(null)
-        toast("Tarif berhasil disimpan ke database")
+        toast("Tarif berhasil disimpan")
 
         await logAudit({
           user_nama: userNama,
@@ -883,7 +993,7 @@ export default function MasterData({ toast, currentUser }: Props) {
         }
 
         setForm(null)
-        toast("Jenis penumpang berhasil disimpan ke database")
+        toast("Jenis penumpang berhasil disimpan")
         await logAudit({
           user_nama: userNama,
           aksi: editId ? "Ubah" : "Tambah",
@@ -1461,7 +1571,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                               setForm({ id: p.id, nama: p.nama, aktif: p.aktif ? "ya" : "tidak" })
                             }
                             onToggle={() => toggle(paxs, setPaxs, p)}
-                            onDelete={() => setDeleteTarget({ type: "Penumpang", id: p.id, name: p.nama })}
+                            onDelete={() => setDeleteTarget({ type: "Penumpang", id: p.id, name: p.nama, extra: { rawId: (p as any).rawId } })}
                           />
                         </tr>
                       ))
@@ -1702,7 +1812,12 @@ export default function MasterData({ toast, currentUser }: Props) {
           <b className="font-semibold text-ink">{deleteTarget?.name}</b> secara permanen?
         </p>
         <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
-          <strong>Peringatan:</strong> Tindakan ini akan menghapus data dari master operasional secara permanen dan tidak dapat dibatalkan. Jika data pernah digunakan dalam riwayat perjalanan terdahulu, disarankan untuk memilih opsi <em>Nonaktifkan</em> agar laporan masa lalu tetap utuh.
+          <strong>Peringatan:</strong>{" "}
+          {deleteTarget?.type === "Segmen"
+            ? "Tindakan ini akan menghapus segmen ini beserta SELURUH data jalur dan tarif yang terhubung secara permanen."
+            : deleteTarget?.type === "Jalur"
+              ? "Tindakan ini akan menghapus jalur ini beserta SELURUH data tarif yang terhubung secara permanen."
+              : "Tindakan ini akan menghapus data dari master operasional secara permanen dan tidak dapat dibatalkan."}
         </p>
       </Dialog>
     </>
