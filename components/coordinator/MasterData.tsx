@@ -491,11 +491,11 @@ export default function MasterData({ toast, currentUser }: Props) {
     if (tab === "Jalur") {
       const asal = f("asal").trim()
       const tujuan = f("tujuan").trim()
-      const nama = asal && tujuan ? `${asal} - ${tujuan}` : (f("nama") || asal || tujuan).trim()
+      const nama = asal && tujuan ? `${asal} - ${tujuan}` : (asal || f("nama") || tujuan).trim()
       const segmentKode = f("segmentId") || segs[0]?.id || ""
 
       if (!nama) {
-        toast("Titik asal dan tujuan jalur wajib diisi")
+        toast("Jalur asal wajib diisi")
         return
       }
 
@@ -906,7 +906,7 @@ export default function MasterData({ toast, currentUser }: Props) {
     tab === "Segmen"
       ? !!f("nama")
       : tab === "Jalur"
-        ? ((!!f("asal") && !!f("tujuan")) || !!f("nama")) && segs.length > 0
+        ? (!!f("asal")?.trim() || !!f("nama")?.trim()) && segs.length > 0
         : tab === "Kendaraan"
           ? !!f("plat")
           : tab === "Penumpang"
@@ -1494,7 +1494,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                 <input
                   value={f("nama")}
                   onChange={(e) => set("nama", e.target.value)}
-                  placeholder="Contoh: Bus Kota, Pariwisata, AKDP"
+                  placeholder="Contoh: Bus Kota"
                   className={inputCls()}
                   autoFocus
                 />
@@ -1546,7 +1546,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                   <input
                     value={f("tujuan")}
                     onChange={(e) => set("tujuan", e.target.value)}
-                    placeholder="Contoh: Ledeng"
+                    placeholder="Contoh: Ledeng (opsional)"
                     className={inputCls()}
                   />
                 </Field>
