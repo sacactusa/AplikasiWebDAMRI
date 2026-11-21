@@ -170,9 +170,14 @@ export default function MasterData({ toast, currentUser }: Props) {
           sesudah: { aktif: nextAktif },
         })
       } else if (tab === "Kendaraan") {
-        const vehItem = item as unknown as { cb: string; plat: string }
+        const vehItem = item as unknown as { cb: string; plat: string; rawId?: string }
+        const rawId = vehItem.rawId
         const platVal = vehItem.plat || vehItem.cb
-        await supabase.from("kendaraan").update({ aktif: nextAktif }).or(`plat.eq.${platVal},id.eq.${platVal}`)
+        if (rawId && UUID_REGEX.test(rawId)) {
+          await supabase.from("kendaraan").update({ aktif: nextAktif }).eq("id", rawId)
+        } else {
+          await supabase.from("kendaraan").update({ aktif: nextAktif }).eq("plat", platVal)
+        }
         await logAudit({
           user_nama: userNama,
           aksi: nextAktif ? "Aktifkan" : "Nonaktifkan",
@@ -369,12 +374,15 @@ export default function MasterData({ toast, currentUser }: Props) {
           sesudah: {},
         })
       } else if (target.type === "Kendaraan") {
-        let vehUuid = UUID_REGEX.test(target.id) ? target.id : null
+        const rawId = target.extra?.rawId || (UUID_REGEX.test(target.id) ? target.id : null)
+        const targetPlat = target.extra?.oldPlat || target.name || target.id
+
+        let vehUuid = rawId
         if (!vehUuid) {
           const { data: vRow } = await supabase
             .from("kendaraan")
             .select("id")
-            .eq("plat", target.id)
+            .eq("plat", targetPlat)
             .limit(1)
           if (vRow?.[0]?.id) vehUuid = vRow[0].id
         }
@@ -383,10 +391,11 @@ export default function MasterData({ toast, currentUser }: Props) {
           await supabase.from("keberangkatan").delete().eq("kendaraan_id", vehUuid)
         }
 
-        const { error } = await supabase
-          .from("kendaraan")
-          .delete()
-          .or(`plat.eq.${target.id},id.eq.${target.id}`)
+        const delQuery = vehUuid
+          ? supabase.from("kendaraan").delete().eq("id", vehUuid)
+          : supabase.from("kendaraan").delete().eq("plat", targetPlat)
+
+        const { error } = await delQuery
 
         if (error) {
           toast(`Gagal menghapus kendaraan: ${error.message}`)
@@ -394,14 +403,21 @@ export default function MasterData({ toast, currentUser }: Props) {
           return
         }
 
-        setVehs((p) => p.filter((v) => v.cb !== target.id && v.plat !== target.id))
+        setVehs((p) =>
+          p.filter(
+            (v) =>
+              (vehUuid ? v.rawId !== vehUuid : true) &&
+              v.cb !== targetPlat &&
+              v.plat !== targetPlat,
+          ),
+        )
         toast(`Kendaraan '${target.name}' berhasil dihapus permanen`)
         await logAudit({
           user_nama: userNama,
           aksi: "Hapus",
           tabel: "kendaraan",
           objek: `kendaraan · ${target.name}`,
-          sebelum: { plat: target.id },
+          sebelum: { plat: target.name },
           sesudah: {},
         })
       } else if (target.type === "Tarif") {
@@ -523,7 +539,7 @@ export default function MasterData({ toast, currentUser }: Props) {
           cleanStr(s.nama) === cleanStr(nama),
       )
       if (isDupSeg) {
-        toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+        toast(`gagal menyimpan "${nama}" karena sudah tersedia`)
         return
       }
 
@@ -555,7 +571,7 @@ export default function MasterData({ toast, currentUser }: Props) {
               cleanStr(s.nama) === cleanStr(nama),
           )
         ) {
-          toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+          toast(`gagal menyimpan "${nama}" karena sudah tersedia`)
           return
         }
         let savedRawId = editRawId
@@ -703,7 +719,7 @@ export default function MasterData({ toast, currentUser }: Props) {
 
       // Validasi duplikasi jalur di state lokal
       if (checkJalurDuplicate(jals)) {
-        toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+        toast(`gagal menyimpan "${nama}" karena sudah tersedia`)
         return
       }
 
@@ -767,7 +783,7 @@ export default function MasterData({ toast, currentUser }: Props) {
           .eq("segmen_id", segId)
 
         if (dbJals && checkJalurDuplicate(dbJals)) {
-          toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+          toast(`gagal menyimpan "${nama}" karena sudah tersedia`)
           return
         }
 
@@ -836,6 +852,8 @@ export default function MasterData({ toast, currentUser }: Props) {
     if (tab === "Kendaraan") {
       const plat = f("plat").trim()
       const editId = f("id")
+      const rawId = f("rawId") || (UUID_REGEX.test(editId) ? editId : undefined)
+      const oldPlat = f("oldPlat") || (!UUID_REGEX.test(editId) ? editId : undefined)
 
       if (!plat) {
         toast("Plat nomor kendaraan wajib diisi")
@@ -843,54 +861,119 @@ export default function MasterData({ toast, currentUser }: Props) {
       }
 
       const cleanPlat = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "").trim()
-      const isDupVeh = vehs.some(
-        (v) =>
-          v.cb !== editId &&
-          v.plat !== editId &&
-          cleanPlat(v.plat) === cleanPlat(plat),
-      )
+
+      // 1. Validasi duplikasi pada state lokal (abaikan kendaraan yang sedang diedit)
+      const isDupVeh = vehs.some((v) => {
+        if (rawId && v.rawId === rawId) return false
+        if (oldPlat && cleanPlat(v.plat) === cleanPlat(oldPlat)) return false
+        if (editId && (v.cb === editId || v.plat === editId)) return false
+        return cleanPlat(v.plat) === cleanPlat(plat)
+      })
+
       if (isDupVeh) {
-        toast(`Gagal menyimpan "${plat}" karena sudah tersedia`)
+        toast(`gagal menyimpan "${plat}" karena sudah tersedia`)
         return
       }
 
+      // 2. Validasi duplikasi di Supabase jika bukan demo
       if (!isDemo) {
         const { data: dbVehs } = await supabase.from("kendaraan").select("id, plat")
-        if (
-          dbVehs &&
-          dbVehs.some(
-            (v) =>
-              v.id !== editId &&
-              v.plat !== editId &&
-              cleanPlat(v.plat) === cleanPlat(plat),
-          )
-        ) {
-          toast(`Gagal menyimpan "${plat}" karena sudah tersedia`)
-          return
+        if (dbVehs) {
+          const isDupInDb = dbVehs.some((v) => {
+            if (rawId && v.id === rawId) return false
+            if (oldPlat && cleanPlat(v.plat) === cleanPlat(oldPlat)) return false
+            if (editId && (v.id === editId || v.plat === editId)) return false
+            return cleanPlat(v.plat) === cleanPlat(plat)
+          })
+          if (isDupInDb) {
+            toast(`gagal menyimpan "${plat}" karena sudah tersedia`)
+            return
+          }
         }
       }
-      if (editId) {
-        setVehs((p) => p.map((x) => x.cb === editId || x.plat === editId ? { ...x, plat, cb: plat } : x))
+
+      // 3. Simpan perubahan ke Supabase & update local state
+      if (editId || rawId) {
         if (!isDemo) {
-          supabase.from("kendaraan").update({ plat }).or(`plat.eq.${editId},id.eq.${editId}`).then(() => {})
+          let updateQuery
+          if (rawId && UUID_REGEX.test(rawId)) {
+            updateQuery = supabase
+              .from("kendaraan")
+              .update({ plat, updated_at: new Date().toISOString() })
+              .eq("id", rawId)
+          } else if (oldPlat) {
+            const { data: found } = await supabase
+              .from("kendaraan")
+              .select("id")
+              .eq("plat", oldPlat)
+              .limit(1)
+            if (found?.[0]?.id) {
+              updateQuery = supabase
+                .from("kendaraan")
+                .update({ plat, updated_at: new Date().toISOString() })
+                .eq("id", found[0].id)
+            } else {
+              updateQuery = supabase
+                .from("kendaraan")
+                .update({ plat, updated_at: new Date().toISOString() })
+                .eq("plat", oldPlat)
+            }
+          } else {
+            updateQuery = supabase
+              .from("kendaraan")
+              .update({ plat, updated_at: new Date().toISOString() })
+              .eq("plat", editId)
+          }
+
+          const { error: updateErr } = await updateQuery
+          if (updateErr) {
+            console.error("Gagal mengubah kendaraan di Supabase:", updateErr)
+            toast(`Gagal menyimpan kendaraan: ${updateErr.message}`)
+            return
+          }
         }
+
+        setVehs((p) =>
+          p.map((x) => {
+            const isTarget =
+              (rawId && x.rawId === rawId) ||
+              (oldPlat && cleanPlat(x.plat) === cleanPlat(oldPlat)) ||
+              x.cb === editId ||
+              x.plat === editId
+            return isTarget ? { ...x, plat, cb: plat } : x
+          }),
+        )
       } else {
-        setVehs((p) => [...p, { cb: plat, plat, aktif: true }])
+        let insertedId: string | undefined
         if (!isDemo) {
-          supabase.from("kendaraan").insert({ plat, aktif: true }).then(() => {})
+          const { data: insData, error: insErr } = await supabase
+            .from("kendaraan")
+            .insert({ plat, aktif: true })
+            .select("id")
+            .single()
+
+          if (insErr) {
+            console.error("Gagal menambah kendaraan di Supabase:", insErr)
+            toast(`Gagal menyimpan kendaraan: ${insErr.message}`)
+            return
+          }
+          insertedId = insData?.id
         }
+
+        setVehs((p) => [...p, { cb: plat, plat, aktif: true, rawId: insertedId }])
       }
+
       setForm(null)
       toast("Kendaraan berhasil disimpan")
       if (isDemo) return
 
       logAudit({
         user_nama: userNama,
-        aksi: editId ? "Ubah" : "Tambah",
+        aksi: editId || rawId ? "Ubah" : "Tambah",
         tabel: "kendaraan",
         objek: `kendaraan · ${plat}`,
-        sebelum: {},
-        sesudah: { plat }
+        sebelum: oldPlat ? { plat: oldPlat } : {},
+        sesudah: { plat },
       })
       return
     }
@@ -929,7 +1012,7 @@ export default function MasterData({ toast, currentUser }: Props) {
         )
       })
       if (isDupTarif) {
-        toast(`Gagal menyimpan tarif "${jalurNama}" karena sudah tersedia`)
+        toast(`gagal menyimpan "${jalurNama}" karena sudah tersedia`)
         return
       }
 
@@ -1103,7 +1186,7 @@ export default function MasterData({ toast, currentUser }: Props) {
           cleanStr(p.nama) === cleanStr(nama),
       )
       if (isDupPax) {
-        toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+        toast(`gagal menyimpan "${nama}" karena sudah tersedia`)
         return
       }
 
@@ -1132,7 +1215,7 @@ export default function MasterData({ toast, currentUser }: Props) {
               cleanStr(p.nama || "") === cleanStr(nama),
           )
         ) {
-          toast(`Gagal menyimpan "${nama}" karena sudah tersedia`)
+          toast(`gagal menyimpan "${nama}" karena sudah tersedia`)
           return
         }
         if (editId && UUID_REGEX.test(editId)) {
@@ -1719,19 +1802,31 @@ export default function MasterData({ toast, currentUser }: Props) {
                     vehs
                       .filter((v) => has(v.plat + (v.cb || "")))
                       .map((v, i, arr) => (
-                        <tr key={v.plat || v.cb} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
+                        <tr key={v.rawId || v.plat || v.cb} className="border-b border-line last:border-0 hover:bg-wash/30 transition-colors">
                           <td className={cx(tdCls, "num font-medium text-slate-800")}>{v.plat}</td>
                           <td className={cx(tdCenter, "w-28 sm:w-32")}>{aktifBadge(v.aktif)}</td>
                           <Aksi
-                            rowKey={`veh_${v.plat || v.cb}`}
+                            rowKey={`veh_${v.rawId || v.plat || v.cb}`}
                             aktif={v.aktif}
                             labelEdit="Ubah Kendaraan"
                             labelDelete="Hapus Kendaraan"
                             onEdit={() =>
-                              setForm({ id: v.plat || v.cb, plat: v.plat })
+                              setForm({
+                                id: v.rawId || v.plat || v.cb,
+                                rawId: v.rawId || "",
+                                plat: v.plat,
+                                oldPlat: v.plat,
+                              })
                             }
-                            onToggle={() => toggle(vehs, setVehs, i)}
-                            onDelete={() => setDeleteTarget({ type: "Kendaraan", id: v.plat || v.cb, name: v.plat })}
+                            onToggle={() => toggle(vehs, setVehs, v)}
+                            onDelete={() =>
+                              setDeleteTarget({
+                                type: "Kendaraan",
+                                id: v.rawId || v.plat || v.cb,
+                                name: v.plat,
+                                extra: { rawId: v.rawId, oldPlat: v.plat },
+                              })
+                            }
                           />
                         </tr>
                       ))

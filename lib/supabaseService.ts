@@ -128,6 +128,7 @@ export async function getMasterData(isDemo = false): Promise<{
       cb: v.plat || v.id,
       plat: v.plat,
       aktif: v.aktif !== undefined ? Boolean(v.aktif) : true,
+      rawId: v.id,
     }))
 
     // Map Jenis Penumpang

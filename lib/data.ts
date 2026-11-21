@@ -19,6 +19,7 @@ export interface Vehicle {
   cb: string
   plat: string
   aktif: boolean
+  rawId?: string
 }
 export interface JenisPenumpang {
   id: string
