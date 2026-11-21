@@ -85,6 +85,17 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
     selectedRole: string
   } | null>(null)
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+
+  useEffect(() => {
+    if (!activeMenu) return
+    const handleScroll = () => {
+      setActiveMenu(null)
+      setMenuPos(null)
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [activeMenu])
 
   return (
     <>
@@ -98,7 +109,7 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
       >
         Akun
       </Title>
-      <div className={cx(tableWrap, "min-h-[280px]")}>
+      <div className={cx(tableWrap, "min-h-[260px] bg-white shadow-xs")}>
         <table className="w-full min-w-[720px]">
           <thead className="border-b border-line bg-wash">
             <tr>
@@ -150,11 +161,23 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                     {u.a ? "Aktif" : "Nonaktif"}
                   </span>
                 </td>
-                <td className={cx(td, "w-28 whitespace-nowrap text-center")}>
-                  <div className="relative inline-block text-left">
+                <td className={cx(td, "w-28 whitespace-nowrap text-center", activeMenu === u.e && "relative z-30")}>
+                  <div className={cx("relative inline-block text-left", activeMenu === u.e && "z-30")}>
                     <button
                       type="button"
-                      onClick={() => setActiveMenu(activeMenu === u.e ? null : u.e)}
+                      onClick={(e) => {
+                        if (activeMenu === u.e) {
+                          setActiveMenu(null)
+                          setMenuPos(null)
+                        } else {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setMenuPos({
+                            top: rect.bottom + 4,
+                            right: Math.max(16, window.innerWidth - rect.right),
+                          })
+                          setActiveMenu(u.e)
+                        }
+                      }}
                       className={cx(
                         "inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-wash focus:outline-hidden",
                         activeMenu === u.e && "border-navy/30 bg-wash ring-1 ring-navy/20",
@@ -169,23 +192,25 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                         )}
                       />
                     </button>
-                    {activeMenu === u.e && (
+                    {activeMenu === u.e && menuPos && (
                       <>
                         <div
-                          className="fixed inset-0 z-20"
-                          onClick={() => setActiveMenu(null)}
+                          className="fixed inset-0 z-40"
+                          onClick={() => {
+                            setActiveMenu(null)
+                            setMenuPos(null)
+                          }}
                         />
                         <div
-                          className={cx(
-                            "absolute right-0 z-30 w-44 rounded-xl border border-line bg-white py-1 shadow-lg ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95",
-                            i >= users.length - 2 ? "bottom-full mb-1" : "top-full mt-1",
-                          )}
+                          style={{ top: menuPos.top, right: menuPos.right }}
+                          className="fixed z-50 w-44 rounded-xl border border-line bg-white py-1 shadow-lg ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95"
                         >
                           <button
                             type="button"
                             disabled={Boolean(currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase())}
                             onClick={() => {
                               setActiveMenu(null)
+                              setMenuPos(null)
                               if (currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase()) {
                                 toast("Anda tidak dapat mengubah peran akun Anda sendiri yang sedang aktif.")
                                 return
@@ -216,6 +241,7 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                             type="button"
                             onClick={() => {
                               setActiveMenu(null)
+                              setMenuPos(null)
                               setReset(u.n)
                             }}
                             className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-slate-50"
@@ -227,6 +253,7 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                             type="button"
                             onClick={async () => {
                               setActiveMenu(null)
+                              setMenuPos(null)
                               if (u.a) {
                                 setDeactivateTarget({ n: u.n, e: u.e })
                               } else {
@@ -268,6 +295,7 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                             disabled={Boolean(currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase())}
                             onClick={() => {
                               setActiveMenu(null)
+                              setMenuPos(null)
                               if (currentUser?.email && u.e.toLowerCase() === currentUser.email.toLowerCase()) {
                                 toast("Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif.")
                                 return

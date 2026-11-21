@@ -275,7 +275,7 @@ export default function Coordinator({
           </button>
           <Logo />
         </header>
-        <main className="w-full max-w-[1280px] mx-auto px-4 py-6 sm:px-8 sm:py-8 flex-1 min-w-0">
+        <main className="w-full max-w-[1280px] mx-auto px-4 pt-6 pb-28 sm:px-8 sm:pt-8 sm:pb-36 flex-1 min-w-0">
           {page === "verifikasi" && (
             <VerifikasiKeberangkatan
               deps={deps}

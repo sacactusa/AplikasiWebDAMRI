@@ -98,6 +98,17 @@ export default function MasterData({ toast, currentUser }: Props) {
   }, [isDemo])
   const [form, setForm] = useState<null | Record<string, string>>(null)
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+
+  useEffect(() => {
+    if (!activeMenuId) return
+    const handleScroll = () => {
+      setActiveMenuId(null)
+      setMenuPos(null)
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [activeMenuId])
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "Segmen" | "Jalur" | "Tarif" | "Kendaraan" | "Penumpang"
     id: string
@@ -1036,7 +1047,6 @@ export default function MasterData({ toast, currentUser }: Props) {
     onToggle,
     onDelete,
     aktif,
-    isNearBottom,
     labelEdit,
     labelDelete,
   }: {
@@ -1045,7 +1055,6 @@ export default function MasterData({ toast, currentUser }: Props) {
     onToggle?: () => void
     onDelete?: () => void
     aktif?: boolean
-    isNearBottom?: boolean
     labelEdit?: string
     labelDelete?: string
   }) => (
@@ -1053,7 +1062,19 @@ export default function MasterData({ toast, currentUser }: Props) {
       <div className={cx("relative inline-block text-left", activeMenuId === rowKey && "z-30")}>
         <button
           type="button"
-          onClick={() => setActiveMenuId(activeMenuId === rowKey ? null : rowKey)}
+          onClick={(e) => {
+            if (activeMenuId === rowKey) {
+              setActiveMenuId(null)
+              setMenuPos(null)
+            } else {
+              const rect = e.currentTarget.getBoundingClientRect()
+              setMenuPos({
+                top: rect.bottom + 4,
+                right: Math.max(16, window.innerWidth - rect.right),
+              })
+              setActiveMenuId(rowKey)
+            }
+          }}
           className={cx(
             "inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-wash focus:outline-hidden",
             activeMenuId === rowKey && "border-navy/30 bg-wash ring-1 ring-navy/20",
@@ -1068,23 +1089,25 @@ export default function MasterData({ toast, currentUser }: Props) {
             )}
           />
         </button>
-        {activeMenuId === rowKey && (
+        {activeMenuId === rowKey && menuPos && (
           <>
             <div
-              className="fixed inset-0 z-20"
-              onClick={() => setActiveMenuId(null)}
+              className="fixed inset-0 z-40"
+              onClick={() => {
+                setActiveMenuId(null)
+                setMenuPos(null)
+              }}
             />
             <div
-              className={cx(
-                "absolute right-0 z-30 w-44 rounded-xl border border-line bg-white py-1 shadow-lg ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95",
-                isNearBottom ? "bottom-full mb-1" : "top-full mt-1",
-              )}
+              style={{ top: menuPos.top, right: menuPos.right }}
+              className="fixed z-50 w-44 rounded-xl border border-line bg-white py-1 shadow-lg ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95"
             >
               {onEdit && (
                 <button
                   type="button"
                   onClick={() => {
                     setActiveMenuId(null)
+                    setMenuPos(null)
                     onEdit()
                   }}
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-slate-50"
@@ -1098,6 +1121,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                   type="button"
                   onClick={() => {
                     setActiveMenuId(null)
+                    setMenuPos(null)
                     onToggle()
                   }}
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-slate-50"
@@ -1122,6 +1146,7 @@ export default function MasterData({ toast, currentUser }: Props) {
                     type="button"
                     onClick={() => {
                       setActiveMenuId(null)
+                      setMenuPos(null)
                       onDelete()
                     }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
@@ -1226,12 +1251,12 @@ export default function MasterData({ toast, currentUser }: Props) {
       <div
         className={cx(
           tableWrap,
-          "min-h-[320px] bg-white shadow-xs transition-all",
+          "min-h-[300px] bg-white shadow-xs transition-all",
           tab === "Segmen" && "max-w-2xl sm:max-w-3xl",
           tab === "Jalur" && "max-w-2xl sm:max-w-3xl",
           tab === "Tarif" && "max-w-4xl sm:max-w-5xl",
           tab === "Kendaraan" && "max-w-2xl sm:max-w-3xl",
-          tab === "Penumpang" && "max-w-2xl sm:max-w-3xl min-h-[360px] pb-20",
+          tab === "Penumpang" && "max-w-2xl sm:max-w-3xl",
         )}
       >
         <table
@@ -1323,7 +1348,6 @@ export default function MasterData({ toast, currentUser }: Props) {
                             <Aksi
                               rowKey={`seg_${s.id}`}
                               aktif={s.aktif}
-                              isNearBottom={arr.length > 3 && i >= arr.length - 2}
                               labelEdit="Ubah Segmen"
                               labelDelete="Hapus Segmen"
                               onEdit={() => {
@@ -1374,7 +1398,6 @@ export default function MasterData({ toast, currentUser }: Props) {
                           <Aksi
                             rowKey={`jal_${j.id}`}
                             aktif={j.aktif}
-                            isNearBottom={arr.length > 3 && i >= arr.length - 2}
                             labelEdit="Ubah Jalur"
                             labelDelete="Hapus Jalur"
                             onEdit={() => {
@@ -1480,7 +1503,6 @@ export default function MasterData({ toast, currentUser }: Props) {
                           </td>
                           <Aksi
                             rowKey={`tar_${x.id || x.jalurId}_${x.mulai}_${i}`}
-                            isNearBottom={arr.length > 3 && i >= arr.length - 2}
                             labelEdit="Edit"
                             labelDelete="Hapus Tarif"
                             onEdit={() =>
@@ -1530,7 +1552,6 @@ export default function MasterData({ toast, currentUser }: Props) {
                           <Aksi
                             rowKey={`veh_${v.plat || v.cb}`}
                             aktif={v.aktif}
-                            isNearBottom={arr.length > 3 && i >= arr.length - 2}
                             labelEdit="Ubah Kendaraan"
                             labelDelete="Hapus Kendaraan"
                             onEdit={() =>
@@ -1564,7 +1585,6 @@ export default function MasterData({ toast, currentUser }: Props) {
                           <Aksi
                             rowKey={`pax_${p.id || i}`}
                             aktif={p.aktif}
-                            isNearBottom={arr.length > 4 && i >= arr.length - 2}
                             labelEdit="Ubah Penumpang"
                             labelDelete="Hapus Penumpang"
                             onEdit={() =>
