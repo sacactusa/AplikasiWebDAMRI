@@ -513,6 +513,18 @@ export default function MasterData({ toast, currentUser }: Props) {
         return
       }
 
+      const normSeg = nama.toLowerCase().replace(/\s+/g, " ")
+      const isDupSeg = segs.some(
+        (s) =>
+          s.id !== editId &&
+          (!editRawId || s.rawId !== editRawId) &&
+          s.nama.trim().toLowerCase().replace(/\s+/g, " ") === normSeg,
+      )
+      if (isDupSeg) {
+        toast(`Segmen '${nama}' sudah ada di data master`)
+        return
+      }
+
       if (isDemo) {
         if (editId) {
           setSegs((p) =>
@@ -614,17 +626,42 @@ export default function MasterData({ toast, currentUser }: Props) {
       const tujuan = f("tujuan").trim()
       const nama = asal && tujuan ? `${asal} - ${tujuan}` : (asal || f("nama") || tujuan).trim()
       const segmentKode = f("segmentId") || segs[0]?.id || ""
+      const editId = f("id")
 
       if (!nama) {
         toast("Jalur asal wajib diisi")
         return
       }
 
+      const targetSeg = segs.find(
+        (s) => s.id === segmentKode || (s.rawId && s.rawId === segmentKode),
+      )
+      const targetSegId = targetSeg?.id || segmentKode
+      const targetSegRawId = targetSeg?.rawId
+      const targetSegNama = targetSeg?.nama ? `"${targetSeg.nama}"` : "ini"
+
+      // Validasi: Cegah duplikasi jalur pada segmen yang sama
+      const normNama = nama.trim().toLowerCase().replace(/\s+/g, " ")
+      const isDuplicateLocal = jals.some((j) => {
+        if (editId && j.id === editId) return false
+        const isSameSeg =
+          j.segmentId === targetSegId ||
+          (targetSegRawId && j.segmentId === targetSegRawId) ||
+          (targetSeg && (j as any).segmen_id === targetSegRawId)
+        if (!isSameSeg) return false
+        return j.nama.trim().toLowerCase().replace(/\s+/g, " ") === normNama
+      })
+
+      if (isDuplicateLocal) {
+        toast(`Jalur '${nama}' sudah ada di segmen ${targetSegNama}`)
+        return
+      }
+
       if (isDemo) {
-        if (f("id")) {
+        if (editId) {
           setJals((p) =>
             p.map((x) =>
-              x.id === f("id") ? { ...x, nama, segmentId: segmentKode } : x,
+              x.id === editId ? { ...x, nama, segmentId: segmentKode } : x,
             ),
           )
         } else {
@@ -670,6 +707,21 @@ export default function MasterData({ toast, currentUser }: Props) {
 
         if (!segId) {
           toast("Gagal: Belum ada Segmen di database. Silakan buat Segmen terlebih dahulu.")
+          return
+        }
+
+        // Cek duplikasi di Supabase (nama jalur pada segmen_id yang sama)
+        let dupQuery = supabase
+          .from("jalur")
+          .select("id, nama")
+          .eq("segmen_id", segId)
+          .ilike("nama", nama)
+        if (editId) {
+          dupQuery = dupQuery.neq("id", editId)
+        }
+        const { data: dbDups } = await dupQuery.limit(1)
+        if (dbDups && dbDups.length > 0) {
+          toast(`Jalur '${nama}' sudah ada di segmen ${targetSegNama}`)
           return
         }
 
@@ -738,6 +790,23 @@ export default function MasterData({ toast, currentUser }: Props) {
     if (tab === "Kendaraan") {
       const plat = f("plat").trim()
       const editId = f("id")
+
+      if (!plat) {
+        toast("Plat nomor kendaraan wajib diisi")
+        return
+      }
+
+      const normPlat = plat.toLowerCase().replace(/\s+/g, "")
+      const isDupVeh = vehs.some(
+        (v) =>
+          v.cb !== editId &&
+          v.plat !== editId &&
+          v.plat.trim().toLowerCase().replace(/\s+/g, "") === normPlat,
+      )
+      if (isDupVeh) {
+        toast(`Kendaraan dengan plat '${plat}' sudah terdaftar`)
+        return
+      }
       if (editId) {
         setVehs((p) => p.map((x) => x.cb === editId || x.plat === editId ? { ...x, plat, cb: plat } : x))
         if (!isDemo) {
@@ -943,6 +1012,17 @@ export default function MasterData({ toast, currentUser }: Props) {
 
       if (!nama) {
         toast("Jenis penumpang wajib diisi")
+        return
+      }
+
+      const normPax = nama.toLowerCase().replace(/\s+/g, " ")
+      const isDupPax = paxs.some(
+        (p) =>
+          p.id !== editId &&
+          p.nama.trim().toLowerCase().replace(/\s+/g, " ") === normPax,
+      )
+      if (isDupPax) {
+        toast(`Jenis penumpang '${nama}' sudah terdaftar`)
         return
       }
 
