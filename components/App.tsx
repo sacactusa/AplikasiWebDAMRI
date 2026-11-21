@@ -10,8 +10,16 @@ import type { Role } from "@/types"
 import { getDepartures, approveDeparture } from "@/lib/supabaseService"
 import { supabase } from "@/lib/supabase"
 
+export interface CurrentUser {
+  nama: string
+  email: string
+  id?: string
+  foto?: string
+  telepon?: string
+}
+
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<{ nama: string; email: string; id?: string } | null>(() => {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
     if (typeof window !== "undefined") {
       try {
         const s = sessionStorage.getItem("damri_current_user")
@@ -43,7 +51,7 @@ export default function App() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800)
   }, [])
 
-  const handleLogin = useCallback((r: Role, u?: { nama: string; email: string; id?: string }) => {
+  const handleLogin = useCallback((r: Role, u?: CurrentUser) => {
     setRole(r)
     if (typeof window !== "undefined") {
       try {

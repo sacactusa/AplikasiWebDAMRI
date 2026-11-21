@@ -19,6 +19,7 @@ import { DRIVER_PHOTO } from "./shared"
 interface Props {
   mine: Departure[]
   nama: string
+  foto?: string
   onOpen: (id: string) => void
   onAdd?: () => void
   onDeleteDraft?: (id: string) => void
@@ -26,7 +27,7 @@ interface Props {
 
 type TabFilter = "all" | "draft" | "dikirim" | "revisi" | "disetujui"
 
-export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDeleteDraft }: Props) {
+export default function DaftarKeberangkatan({ mine, nama, foto, onOpen, onAdd, onDeleteDraft }: Props) {
   const [f, setF] = useState<TabFilter>("all")
   const [deleteDraftTarget, setDeleteDraftTarget] = useState<Departure | null>(null)
 
@@ -91,7 +92,7 @@ export default function DaftarKeberangkatan({ mine, nama, onOpen, onAdd, onDelet
         <div className="relative flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <img
-              src={DRIVER_PHOTO}
+              src={foto || DRIVER_PHOTO}
               alt={`Foto profil ${nama}`}
               className="size-12 shrink-0 rounded-xl border-2 border-white/80 object-cover shadow-md"
             />

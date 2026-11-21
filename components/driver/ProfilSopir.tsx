@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { DRIVER_PHOTO, DamriWordmark, type DriverProfile } from "./shared"
+import { compressImage } from "@/lib/imageUtils"
 
 interface Props {
   profile: DriverProfile
@@ -61,7 +62,7 @@ export default function ProfilSopir({
     setPasswordOpen(true)
   }
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -75,16 +76,15 @@ export default function ProfilSopir({
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const result = event.target?.result as string
-      if (result) {
-        setDraft((curr) => ({ ...curr, foto: result }))
-        toast("Foto berhasil dipilih. Klik 'Simpan perubahan' untuk menerapkan.")
-      }
+    try {
+      const compressed = await compressImage(file)
+      setDraft((curr) => ({ ...curr, foto: compressed }))
+      toast("Foto berhasil dipilih. Klik 'Simpan perubahan' untuk menerapkan.")
+    } catch {
+      toast("Gagal memproses gambar", "error")
+    } finally {
+      e.target.value = ""
     }
-    reader.readAsDataURL(file)
-    e.target.value = ""
   }
 
   return (

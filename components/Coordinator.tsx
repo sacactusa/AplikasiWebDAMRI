@@ -18,6 +18,7 @@ import {
 import type { Departure } from "@/lib/data"
 import { Btn, Dialog, Field, Logo, cx, inputCls } from "@/components/ui"
 import { PROFILE_PHOTO, type CoordinatorProfile, type Page } from "./coordinator/shared"
+import { compressImage } from "@/lib/imageUtils"
 import VerifikasiKeberangkatan from "./coordinator/VerifikasiKeberangkatan"
 import DashboardAnalitik from "./coordinator/DashboardAnalitik"
 import LaporanOperasional from "./coordinator/LaporanOperasional"
@@ -35,7 +36,7 @@ interface Props {
   toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   clearNew: () => void
-  currentUser?: { nama: string; email: string; id?: string } | null
+  currentUser?: { nama: string; email: string; id?: string; foto?: string; telepon?: string } | null
 }
 
 export default function Coordinator({
@@ -71,8 +72,8 @@ export default function Coordinator({
       return {
         nama: currentUser.nama || "Koordinator",
         email: currentUser.email || "koordinator@damri.co.id",
-        telepon: "0812 3456 7890",
-        foto: PROFILE_PHOTO,
+        telepon: currentUser.telepon || "0812 3456 7890",
+        foto: currentUser.foto || PROFILE_PHOTO,
       }
     }
     return {
@@ -83,20 +84,51 @@ export default function Coordinator({
     }
   })
 
+  const isDemoCoord = currentUser?.email === "koordinator@damri.co.id"
+
   useEffect(() => {
     if (currentUser) {
       setProfile((prev) => ({
         ...prev,
         nama: currentUser.nama || prev.nama,
         email: currentUser.email || prev.email,
+        foto: currentUser.foto || prev.foto || PROFILE_PHOTO,
+        telepon: currentUser.telepon || prev.telepon,
       }))
       setProfileDraft((prev) => ({
         ...prev,
         nama: currentUser.nama || prev.nama,
         email: currentUser.email || prev.email,
+        foto: currentUser.foto || prev.foto || PROFILE_PHOTO,
+        telepon: currentUser.telepon || prev.telepon,
       }))
+
+      // Ambil data profil terbaru dari Supabase (foto_url & telepon) lintas browser
+      if (currentUser.id && !isDemoCoord) {
+        supabase
+          .from("profiles")
+          .select("nama, telepon, foto_url")
+          .eq("id", currentUser.id)
+          .single()
+          .then(({ data, error }) => {
+            if (data && !error) {
+              const foto = data.foto_url || PROFILE_PHOTO
+              const telepon = data.telepon || "0812 3456 7890"
+              const nama = data.nama || currentUser.nama
+              setProfile((p) => {
+                const next = { ...p, nama, telepon, foto }
+                try {
+                  const key = "damri_coord_profile_" + currentUser.email
+                  localStorage.setItem(key, JSON.stringify(next))
+                } catch {}
+                return next
+              })
+              setProfileDraft((p) => ({ ...p, nama, telepon, foto }))
+            }
+          })
+      }
     }
-  }, [currentUser])
+  }, [currentUser, isDemoCoord])
   const [profileDraft, setProfileDraft] = useState<CoordinatorProfile>(profile)
   const [password, setPassword] = useState("damri123")
   const [passwordForm, setPasswordForm] = useState({
@@ -112,7 +144,7 @@ export default function Coordinator({
     window.scrollTo({ top: 0, behavior: "instant" })
   }, [page])
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -126,16 +158,15 @@ export default function Coordinator({
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const result = event.target?.result as string
-      if (result) {
-        setProfileDraft((curr) => ({ ...curr, foto: result }))
-        toast("Foto berhasil dipilih. Klik 'Simpan perubahan' untuk menerapkan.")
-      }
+    try {
+      const compressed = await compressImage(file)
+      setProfileDraft((curr) => ({ ...curr, foto: compressed }))
+      toast("Foto berhasil dipilih. Klik 'Simpan perubahan' untuk menerapkan.")
+    } catch {
+      toast("Gagal memproses gambar", "error")
+    } finally {
+      e.target.value = ""
     }
-    reader.readAsDataURL(file)
-    e.target.value = ""
   }
 
   const items: [Page, string, React.ReactNode][] = [
@@ -330,7 +361,7 @@ export default function Coordinator({
               Batal
             </Btn>
             <Btn
-              onClick={() => {
+              onClick={async () => {
                 const updated: CoordinatorProfile = {
                   nama: profileDraft.nama.trim() || profile.nama,
                   email: profileDraft.email.trim() || profile.email,
@@ -340,13 +371,23 @@ export default function Coordinator({
                 setProfile(updated)
                 if (typeof window !== "undefined") {
                   try {
-                    const isDemoCoord = currentUser?.email === "koordinator@damri.co.id"
                     const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"
                     localStorage.setItem(key, JSON.stringify(updated))
                     if (!isDemoCoord && currentUser?.id) {
-                      supabase.from("profiles").update({ nama: updated.nama, telepon: updated.telepon }).eq("id", currentUser.id).then(() => {})
+                      const dbFoto = updated.foto && updated.foto !== PROFILE_PHOTO ? updated.foto : null
+                      await supabase
+                        .from("profiles")
+                        .update({
+                          nama: updated.nama,
+                          telepon: updated.telepon,
+                          foto_url: dbFoto,
+                          updated_at: new Date().toISOString(),
+                        })
+                        .eq("id", currentUser.id)
                     }
-                  } catch {}
+                  } catch (err) {
+                    console.error("Gagal simpan profil koordinator ke Supabase:", err)
+                  }
                 }
                 setProfileDialog(false)
                 toast("Profil berhasil diperbarui")

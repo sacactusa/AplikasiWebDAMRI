@@ -21,7 +21,7 @@ interface Props {
   toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   submitted: (d: Departure) => void
-  currentUser?: { nama: string; email: string; id?: string } | null
+  currentUser?: { nama: string; email: string; id?: string; foto?: string; telepon?: string } | null
 }
 
 type View =
@@ -54,14 +54,14 @@ export default function Driver({
           }
           return parsed
         }
-      } catch {}
+      } catch { }
     }
     if (currentUser) {
       return {
         nama: currentUser.nama || (currentUser.email === "sopir@damri.co.id" ? ME : "Sopir"),
         email: currentUser.email || "sopir@damri.co.id",
-        telepon: "0813 2456 7890",
-        foto: DRIVER_PHOTO,
+        telepon: currentUser.telepon || "0813 2456 7890",
+        foto: currentUser.foto || DRIVER_PHOTO,
       }
     }
     return {
@@ -72,17 +72,44 @@ export default function Driver({
     }
   })
 
+  const isDemoDriver = currentUser?.email === "sopir@damri.co.id"
+
   useEffect(() => {
     if (currentUser) {
       setProfile((prev) => ({
         ...prev,
         nama: currentUser.nama || prev.nama,
         email: currentUser.email || prev.email,
+        foto: currentUser.foto || prev.foto || DRIVER_PHOTO,
+        telepon: currentUser.telepon || prev.telepon,
       }))
+
+      // Ambil data profil terbaru dari Supabase (termasuk foto_url & telepon) lintas browser
+      if (currentUser.id && !isDemoDriver) {
+        supabase
+          .from("profiles")
+          .select("nama, telepon, foto_url")
+          .eq("id", currentUser.id)
+          .single()
+          .then(({ data, error }) => {
+            if (data && !error) {
+              const foto = data.foto_url || DRIVER_PHOTO
+              const telepon = data.telepon || "0813 2456 7890"
+              const nama = data.nama || currentUser.nama
+              setProfile((p) => {
+                const next = { ...p, nama, telepon, foto }
+                try {
+                  const key = "damri_driver_profile_" + currentUser.email
+                  localStorage.setItem(key, JSON.stringify(next))
+                } catch { }
+                return next
+              })
+            }
+          })
+      }
     }
-  }, [currentUser])
+  }, [currentUser, isDemoDriver])
   const [password, setPassword] = useState("damri123")
-  const isDemoDriver = currentUser?.email === "sopir@damri.co.id"
   const mine = useMemo(
     () =>
       deps
@@ -137,6 +164,7 @@ export default function Driver({
           <DaftarKeberangkatan
             mine={mine}
             nama={profile.nama}
+            foto={profile.foto}
             onOpen={(id) => {
               lastTabRef.current = "list"
               setView({ n: "detail", id })
@@ -149,6 +177,7 @@ export default function Driver({
           <RiwayatSopir
             mine={mine}
             nama={profile.nama}
+            foto={profile.foto}
             onOpen={(id) => {
               lastTabRef.current = "riwayat"
               setView({ n: "detail", id })
@@ -158,16 +187,27 @@ export default function Driver({
         {view.n === "profil" && (
           <ProfilSopir
             profile={profile}
-            setProfile={(p) => {
+            setProfile={async (p) => {
               setProfile(p)
               if (typeof window !== "undefined") {
                 try {
                   const key = currentUser?.email ? "damri_driver_profile_" + currentUser.email : "damri_driver_profile"
                   localStorage.setItem(key, JSON.stringify(p))
                   if (!isDemoDriver && currentUser?.id) {
-                    supabase.from("profiles").update({ nama: p.nama, telepon: p.telepon }).eq("id", currentUser.id).then(() => {})
+                    const dbFoto = p.foto && p.foto !== DRIVER_PHOTO ? p.foto : null
+                    await supabase
+                      .from("profiles")
+                      .update({
+                        nama: p.nama,
+                        telepon: p.telepon,
+                        foto_url: dbFoto,
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq("id", currentUser.id)
                   }
-                } catch {}
+                } catch (err) {
+                  console.error("Gagal simpan profil sopir ke Supabase:", err)
+                }
               }
             }}
             password={password}
@@ -230,7 +270,7 @@ export default function Driver({
               onSave={async (d) => {
                 if (!isDemoDriver) {
                   await updateDeparture(d, profile.nama)
-                  getDepartures(false).then((live) => setDeps(live)).catch(() => {})
+                  getDepartures(false).then((live) => setDeps(live)).catch(() => { })
                 }
                 setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
                 setView({ n: lastTabRef.current })
@@ -243,7 +283,7 @@ export default function Driver({
                     toast("Gagal mengirim keberangkatan ke koordinator", "error")
                     return
                   }
-                  getDepartures(false).then((live) => setDeps(live)).catch(() => {})
+                  getDepartures(false).then((live) => setDeps(live)).catch(() => { })
                 }
                 const sentDep = { ...d, status: "dikirim" as const, rejectNote: undefined }
                 setDeps((p) => [sentDep, ...p.filter((x) => x.id !== d.id)])

@@ -40,7 +40,14 @@ const ROLES = {
 
 type Step = "pilih" | "masuk" | "daftar"
 
-export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: string; email: string; id?: string }) => void }) {
+export default function FormLogin({
+  onLogin,
+}: {
+  onLogin: (
+    r: Role,
+    u?: { nama: string; email: string; id?: string; foto?: string; telepon?: string },
+  ) => void
+}) {
   const [step, setStep] = useState<Step>("pilih")
   const [role, setRole] = useState<Exclude<Role, null>>("sopir")
   const [nama, setNama] = useState("")
@@ -89,10 +96,10 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
         return setError("Email atau kata sandi salah")
       }
 
-      // Ambil peran dari tabel profiles
+      // Ambil data profil dari tabel profiles (termasuk foto_url & telepon)
       const { data: prof } = await supabase
         .from("profiles")
-        .select("role, nama")
+        .select("role, nama, foto_url, telepon")
         .eq("id", data.user.id)
         .single()
 
@@ -106,7 +113,13 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
 
       const userNama = prof?.nama || data.user.user_metadata?.nama || cleanEmail.split("@")[0]
       setLoading(false)
-      onLogin(userRole, { nama: userNama, email: cleanEmail, id: data.user.id })
+      onLogin(userRole, {
+        nama: userNama,
+        email: cleanEmail,
+        id: data.user.id,
+        foto: prof?.foto_url || undefined,
+        telepon: prof?.telepon || undefined,
+      })
     } catch {
       setLoading(false)
       setError("Email atau kata sandi salah")
