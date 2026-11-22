@@ -1,27 +1,64 @@
 "use client"
 
+<<<<<<< HEAD
 import { Download } from "lucide-react"
+=======
+import { useState, useEffect } from "react"
+import { Download } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { formatAuditTime } from "@/lib/supabaseService"
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
 import { Btn, cx } from "@/components/ui"
 import { Title, th, td, tableWrap } from "./shared"
+import type { Departure } from "@/lib/data"
+import { exportArsipBulanan } from "@/lib/excelExport"
 
 interface Props {
   toast: (t: string) => void
+  deps?: Departure[]
 }
 
-export default function ArsipBackup({ toast }: Props) {
-  const months = [
+export default function ArsipBackup({ toast, deps = [] }: Props) {
+  const [months, setMonths] = useState([
     "Oktober 2026 (berjalan)",
     "September 2026",
     "Agustus 2026",
     "Juli 2026",
     "Juni 2026",
-  ]
-  const backups = [
+  ])
+  const [backups, setBackups] = useState([
     { id: "b1", t: "16 Okt 2026 02:00", ok: true, size: "48,6 MB" },
     { id: "b2", t: "15 Okt 2026 02:00", ok: true, size: "48,2 MB" },
     { id: "b3", t: "14 Okt 2026 02:00", ok: false, size: "–" },
     { id: "b4", t: "13 Okt 2026 02:00", ok: true, size: "47,9 MB" },
+<<<<<<< HEAD
   ]
+=======
+  ])
+
+  useEffect(() => {
+    supabase.from("backup_log").select("*").order("waktu", { ascending: false }).limit(20).then(({ data }) => {
+      if (data && data.length > 0) {
+        setBackups(data.map((b) => ({
+          id: b.id,
+          t: formatAuditTime(b.waktu),
+          ok: b.berhasil,
+          size: b.ukuran_byte ? (b.ukuran_byte / (1024 * 1024)).toFixed(1) + " MB" : "–"
+        })))
+      }
+    })
+
+    supabase.from("arsip_bulanan").select("*").order("periode", { ascending: false }).limit(12).then(({ data }) => {
+      if (data && data.length > 0) {
+        setMonths(data.map((a) => {
+          const d = new Date(a.periode)
+          const mNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+          return `${mNames[d.getMonth()]} ${d.getFullYear()}`
+        }))
+      }
+    })
+  }, [])
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
 
   return (
     <>
@@ -35,9 +72,15 @@ export default function ArsipBackup({ toast }: Props) {
             <span className="text-sm font-medium">{m}</span>
             <Btn
               variant="ghost"
-              onClick={() =>
-                toast(`Arsip ${m.split(" (")[0]} (.xlsx) siap diunduh`)
-              }
+              onClick={async () => {
+                const label = m.split(" (")[0]
+                try {
+                  await exportArsipBulanan(label, deps)
+                  toast(`Arsip ${label} (.xlsx) berhasil diunduh`)
+                } catch (e) {
+                  toast(`Gagal mengunduh arsip ${label}`)
+                }
+              }}
             >
               <Download size={16} /> .xlsx
             </Btn>

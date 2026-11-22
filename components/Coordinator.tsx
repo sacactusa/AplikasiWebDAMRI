@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect, useRef, useState } from "react"
@@ -8,7 +9,6 @@ import {
   Database,
   FileSpreadsheet,
   LayoutDashboard,
-  LogOut,
   Menu,
   ScrollText,
   Trash2,
@@ -26,6 +26,7 @@ import ManajemenAkun from "./coordinator/ManajemenAkun"
 import ArsipBackup from "./coordinator/ArsipBackup"
 import AuditLog from "./coordinator/AuditLog"
 import ProfilKoordinator from "./coordinator/ProfilKoordinator"
+import { supabase } from "@/lib/supabase"
 
 interface Props {
   deps: Departure[]
@@ -34,6 +35,7 @@ interface Props {
   toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   clearNew: () => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 
 export default function Coordinator({
@@ -43,6 +45,7 @@ export default function Coordinator({
   toast,
   onLogout,
   clearNew,
+  currentUser,
 }: Props) {
   const [page, setPage] = useState<Page>("verifikasi")
   const [menu, setMenu] = useState(false)
@@ -50,6 +53,7 @@ export default function Coordinator({
   const [passwordDialog, setPasswordDialog] = useState(false)
   const [logoutDialog, setLogoutDialog] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+<<<<<<< HEAD
 
   const [profile, setProfile] = useState<CoordinatorProfile>(() => {
     if (typeof window !== "undefined") {
@@ -58,6 +62,30 @@ export default function Coordinator({
         if (saved) return JSON.parse(saved)
       } catch {}
     }
+=======
+  const [profile, setProfile] = useState<CoordinatorProfile>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"
+        const saved = localStorage.getItem(key)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (parsed.foto && parsed.foto.includes("images.unsplash.com")) {
+            parsed.foto = PROFILE_PHOTO
+          }
+          return parsed
+        }
+      } catch {}
+    }
+    if (currentUser) {
+      return {
+        nama: currentUser.nama || "Koordinator",
+        email: currentUser.email || "koordinator@damri.co.id",
+        telepon: "0812 3456 7890",
+        foto: PROFILE_PHOTO,
+      }
+    }
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
     return {
       nama: "Rina Marlina",
       email: "koordinator@damri.co.id",
@@ -65,6 +93,24 @@ export default function Coordinator({
       foto: PROFILE_PHOTO,
     }
   })
+<<<<<<< HEAD
+=======
+
+  useEffect(() => {
+    if (currentUser) {
+      setProfile((prev) => ({
+        ...prev,
+        nama: currentUser.nama || prev.nama,
+        email: currentUser.email || prev.email,
+      }))
+      setProfileDraft((prev) => ({
+        ...prev,
+        nama: currentUser.nama || prev.nama,
+        email: currentUser.email || prev.email,
+      }))
+    }
+  }, [currentUser])
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
   const [profileDraft, setProfileDraft] = useState<CoordinatorProfile>(profile)
   const [password, setPassword] = useState("damri123")
   const [passwordForm, setPasswordForm] = useState({
@@ -117,9 +163,23 @@ export default function Coordinator({
   ]
 
   const nav = (
+<<<<<<< HEAD
     <div className="flex h-full flex-col overflow-y-auto bg-gradient-to-b from-navy to-[#06173a] p-4 text-white">
       <div className="mb-8 mt-1 shrink-0 px-2">
+=======
+    <div className="flex h-full flex-col bg-gradient-to-b from-navy to-navy-900 p-4 text-white">
+      <div className="mb-6 mt-1 flex items-center justify-between px-2">
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
         <Logo light />
+        {menu && (
+          <button
+            onClick={() => setMenu(false)}
+            aria-label="Tutup menu"
+            className="rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
       <nav className="space-y-1">
         {items.map(([k, l, i]) => (
@@ -201,6 +261,7 @@ export default function Coordinator({
             </p>
           </div>
         </button>
+<<<<<<< HEAD
         <button
           onClick={() => {
             setMenu(false)
@@ -210,22 +271,28 @@ export default function Coordinator({
         >
           <LogOut size={16} /> Keluar
         </button>
+=======
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
       </div>
     </div>
   )
 
   return (
     <div className="flex min-h-screen bg-wash text-ink">
+<<<<<<< HEAD
       <aside className="sticky top-0 z-20 hidden h-screen w-64 shrink-0 self-start lg:block">
+=======
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-navy-900/20 bg-navy shadow-sm lg:block">
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
         {nav}
       </aside>
       {menu && (
         <div
-          className="fixed inset-0 z-50 bg-ink/40 lg:hidden"
+          className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-xs transition-opacity lg:hidden"
           onClick={() => setMenu(false)}
         >
           <div
-            className="h-full w-72 max-w-[80vw]"
+            className="h-full w-72 max-w-[85vw] shadow-2xl animate-in slide-in-from-left duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {nav}
@@ -233,17 +300,25 @@ export default function Coordinator({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
+<<<<<<< HEAD
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-white px-4 lg:hidden">
+=======
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-white/95 px-4 backdrop-blur-md shadow-2xs lg:hidden">
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
           <button
             aria-label="Buka menu navigasi"
             onClick={() => setMenu(true)}
-            className="grid size-10 place-items-center rounded-lg hover:bg-wash"
+            className="grid size-10 place-items-center rounded-lg text-navy hover:bg-wash active:scale-95 transition"
           >
             <Menu size={22} />
           </button>
           <Logo />
         </header>
+<<<<<<< HEAD
         <main className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-8 sm:py-10">
+=======
+        <main className="w-full max-w-[1280px] mx-auto px-4 py-6 sm:px-8 sm:py-8 flex-1 min-w-0">
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
           {page === "verifikasi" && (
             <VerifikasiKeberangkatan
               deps={deps}
@@ -259,9 +334,9 @@ export default function Coordinator({
           {page === "laporan" && (
             <LaporanOperasional deps={deps} toast={toast} />
           )}
-          {page === "master" && <MasterData toast={toast} />}
-          {page === "akun" && <ManajemenAkun toast={toast} />}
-          {page === "arsip" && <ArsipBackup toast={toast} />}
+          {page === "master" && <MasterData toast={toast} currentUser={currentUser} />}
+          {page === "akun" && <ManajemenAkun toast={toast} currentUser={currentUser} />}
+          {page === "arsip" && <ArsipBackup toast={toast} deps={deps} />}
           {page === "audit" && <AuditLog />}
           {page === "profil" && (
             <ProfilKoordinator
@@ -310,7 +385,11 @@ export default function Coordinator({
                 setProfile(updated)
                 if (typeof window !== "undefined") {
                   try {
+<<<<<<< HEAD
                     localStorage.setItem("damri_coord_profile", JSON.stringify(updated))
+=======
+                    const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"; localStorage.setItem(key, JSON.stringify(updated)); if (currentUser?.id) { supabase.from("profiles").update({ nama: updated.nama, telepon: updated.telepon }).eq("id", currentUser.id).then(() => {}); }
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
                   } catch {}
                 }
                 setProfileDialog(false)
@@ -374,6 +453,12 @@ export default function Coordinator({
                   </button>
                 )}
               </div>
+<<<<<<< HEAD
+=======
+              <p className="mt-1.5 text-[11px] text-mute">
+                Format: JPG, PNG, atau WebP (Maks. 5 MB)
+              </p>
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
             </div>
           </div>
           <Field label="Nama lengkap">
@@ -526,7 +611,11 @@ export default function Coordinator({
         }
       >
         <p>
+<<<<<<< HEAD
           Apakah Anda yakin ingin keluar dari akun Koordinator? Pastikan seluruh
+=======
+          Apakah Anda yakin ingin keluar dari akun Koordinator ({profile.nama})? Pastikan seluruh
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
           pemeriksaan dan perubahan data operasional telah disimpan sebelum
           mengakhiri sesi ini.
         </p>

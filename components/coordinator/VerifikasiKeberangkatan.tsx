@@ -18,6 +18,7 @@ import {
 } from "@/lib/data"
 import {
   Btn,
+  DateInput,
   Dialog,
   Drawer,
   Empty,
@@ -27,6 +28,7 @@ import {
   inputCls,
 } from "@/components/ui"
 import { Title, th, td, tableWrap, type Page } from "./shared"
+import { approveDeparture, rejectDeparture } from "@/lib/supabaseService"
 
 interface Props {
   deps: Departure[]
@@ -45,6 +47,11 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
   const [bulk, setBulk] = useState(false)
   const [rej, setRej] = useState<string | null>(null)
   const [note, setNote] = useState("")
+
+  const driverOptions = useMemo(
+    () => Array.from(new Set([...DRIVERS, ...deps.map((d) => d.driver).filter(Boolean)])),
+    [deps],
+  )
 
   const rows = useMemo(
     () =>
@@ -76,6 +83,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
         ids.includes(d.id) ? { ...d, status: "disetujui", isNew: false } : d,
       ),
     )
+    ids.forEach((id) => approveDeparture(id, "Koordinator"))
     setSel((s) => s.filter((x) => !ids.includes(x)))
     setOpen(null)
     toast(
@@ -92,6 +100,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           : d,
       ),
     )
+    if (rej) rejectDeparture(rej, note.trim(), "Koordinator")
     setRej(null)
     setOpen(null)
     setNote("")
@@ -143,12 +152,11 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <input
-          type="date"
+                <DateInput
           aria-label="Tanggal"
+          placeholder="dd/mm/yyyy"
           value={fd}
-          onChange={(e) => setFd(e.target.value)}
-          className={cx(inputCls(), "num h-11")}
+          onChange={setFd}
         />
         <select
           aria-label="Segmen"
@@ -183,7 +191,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           className={cx(inputCls(), "h-11")}
         >
           <option value="">Semua sopir</option>
-          {DRIVERS.map((s) => (
+          {driverOptions.map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
@@ -290,7 +298,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
       )}
 
       {(selIds.length > 0 || (scoped && rows.length > 1)) && (
-        <div className="rise fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-2xl flex-wrap items-center gap-3 rounded-2xl bg-ink p-3 pl-5 text-white shadow-2xl">
+        <div className="rise fixed inset-x-4 bottom-6 z-40 mx-auto flex max-w-2xl flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-navy-900/95 p-3.5 pl-5 text-white shadow-2xl backdrop-blur-md lg:left-[calc(16rem+1rem)] lg:right-6 lg:mx-auto">
           <span className="text-sm font-semibold">{selIds.length} dipilih</span>
           {scoped && !allSel && (
             <button

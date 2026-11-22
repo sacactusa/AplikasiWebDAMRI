@@ -1,6 +1,11 @@
 "use client"
 
+<<<<<<< HEAD
 import { useMemo, useRef, useState } from "react"
+=======
+import { useMemo, useRef, useState, useEffect } from "react"
+import { supabase } from "@/lib/supabase"
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
 import { CheckCircle2, History, List, Plus, User } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { ME } from "@/lib/data"
@@ -11,6 +16,10 @@ import ProfilSopir from "./driver/ProfilSopir"
 import InputKeberangkatan from "./driver/InputKeberangkatan"
 import DetailKeberangkatan from "./driver/DetailKeberangkatan"
 import { DRIVER_PHOTO, type DriverProfile } from "./driver/shared"
+<<<<<<< HEAD
+=======
+import { createDeparture, updateDeparture } from "@/lib/supabaseService"
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
 
 interface Props {
   deps: Departure[]
@@ -19,6 +28,7 @@ interface Props {
   toast: (t: string, type?: "success" | "error") => void
   onLogout: () => void
   submitted: (d: Departure) => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 
 type View =
@@ -36,16 +46,39 @@ export default function Driver({
   toast,
   onLogout,
   submitted,
+  currentUser,
 }: Props) {
   const [view, setView] = useState<View>({ n: "list" })
   const lastTabRef = useRef<"list" | "riwayat">("list")
   const [profile, setProfile] = useState<DriverProfile>(() => {
     if (typeof window !== "undefined") {
       try {
+<<<<<<< HEAD
         const saved = localStorage.getItem("damri_driver_profile")
         if (saved) return JSON.parse(saved)
       } catch {}
     }
+=======
+        const key = currentUser?.email ? "damri_driver_profile_" + currentUser.email : "damri_driver_profile"
+        const saved = localStorage.getItem(key)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (parsed.foto && parsed.foto.includes("images.unsplash.com")) {
+            parsed.foto = DRIVER_PHOTO
+          }
+          return parsed
+        }
+      } catch {}
+    }
+    if (currentUser) {
+      return {
+        nama: currentUser.nama || ME,
+        email: currentUser.email || "sopir@damri.co.id",
+        telepon: "0813 2456 7890",
+        foto: DRIVER_PHOTO,
+      }
+    }
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
     return {
       nama: ME,
       email: "sopir@damri.co.id",
@@ -53,13 +86,24 @@ export default function Driver({
       foto: DRIVER_PHOTO,
     }
   })
+
+  useEffect(() => {
+    if (currentUser) {
+      setProfile((prev) => ({
+        ...prev,
+        nama: currentUser.nama || prev.nama,
+        email: currentUser.email || prev.email,
+      }))
+    }
+  }, [currentUser])
   const [password, setPassword] = useState("damri123")
+  const isDemoDriver = currentUser?.email === "sopir@damri.co.id"
   const mine = useMemo(
     () =>
       deps
-        .filter((d) => d.driver === ME)
+        .filter((d) => (isDemoDriver ? d.driver === ME : d.driver === profile.nama))
         .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)),
-    [deps],
+    [deps, profile.nama, isDemoDriver],
   )
   const pendingRevisions = useMemo(
     () => mine.filter((d) => Boolean(d.rejectNote)).length,
@@ -85,6 +129,10 @@ export default function Driver({
               lastTabRef.current = "list"
               setView({ n: "detail", id })
             }}
+<<<<<<< HEAD
+=======
+            onAdd={() => setView({ n: "add" })}
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
           />
         )}
         {view.n === "riwayat" && (
@@ -104,7 +152,11 @@ export default function Driver({
               setProfile(p)
               if (typeof window !== "undefined") {
                 try {
+<<<<<<< HEAD
                   localStorage.setItem("damri_driver_profile", JSON.stringify(p))
+=======
+                  const key = currentUser?.email ? "damri_driver_profile_" + currentUser.email : "damri_driver_profile"; localStorage.setItem(key, JSON.stringify(p)); if (currentUser?.id) { supabase.from("profiles").update({ nama: p.nama, telepon: p.telepon }).eq("id", currentUser.id).then(() => {}); }
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
                 } catch {}
               }
             }}
@@ -120,6 +172,7 @@ export default function Driver({
           <InputKeberangkatan
             deps={deps}
             offline={offline}
+<<<<<<< HEAD
             onCancel={() => setView({ n: lastTabRef.current })}
             onSave={(d) => {
               setDeps((p) => [d, ...p])
@@ -153,6 +206,65 @@ export default function Driver({
             }}
           />
         )}
+=======
+            driverName={profile.nama}
+            onCancel={() => setView({ n: lastTabRef.current })}
+            onSave={async (d) => {
+              setDeps((p) => [d, ...p])
+              setView({ n: "detail", id: d.id })
+              toast("Berhasil disimpan")
+              const res = await createDeparture(d, currentUser?.email)
+              if (res.id && res.id !== d.id) {
+                setDeps((p) => p.map((x) => (x.id === d.id ? { ...x, id: res.id! } : x)))
+                setView((v) => (v.n === "detail" && v.id === d.id ? { n: "detail", id: res.id! } : v))
+              }
+            }}
+          />
+        )}
+        {view.n === "detail" && (() => {
+          const targetDep = deps.find((d) => d.id === view.id)
+          if (!targetDep) {
+            return (
+              <div className="flex min-h-[50vh] flex-col items-center justify-center p-8 text-center">
+                <p className="text-sm text-mute">Memuat detail keberangkatan...</p>
+                <button
+                  onClick={() => setView({ n: lastTabRef.current })}
+                  className="mt-4 text-xs font-semibold text-navy underline cursor-pointer"
+                >
+                  Kembali ke daftar
+                </button>
+              </div>
+            )
+          }
+          return (
+            <DetailKeberangkatan
+              key={view.id}
+              dep={targetDep}
+              offline={offline}
+              onBack={() => setView({ n: lastTabRef.current })}
+              onSave={(d) => {
+                setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
+                updateDeparture(d, profile.nama)
+                setView({ n: lastTabRef.current })
+                toast("Berhasil disimpan")
+              }}
+              onSubmit={(d) => {
+                setDeps((p) => p.map((x) => (x.id === d.id ? d : x)))
+                updateDeparture(d, profile.nama)
+                submitted(d)
+                setView({ n: "success" })
+                setTimeout(
+                  () =>
+                    setView((v) =>
+                      v.n === "success" ? { n: lastTabRef.current } : v,
+                    ),
+                  2200,
+                )
+              }}
+            />
+          )
+        })()}
+>>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
         {view.n === "success" && (
           <div className="rise flex min-h-[80vh] flex-col items-center justify-center px-8 text-center">
             <div className="grid size-24 place-items-center rounded-full bg-emerald-50 text-emerald-700">

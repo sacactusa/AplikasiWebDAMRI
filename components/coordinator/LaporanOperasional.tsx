@@ -1,11 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getMasterData } from "@/lib/supabaseService"
+import type { Segment, Jalur } from "@/lib/data"
 import { Download, LoaderCircle } from "lucide-react"
 import type { Departure } from "@/lib/data"
 import { JALUR, SEGMENTS, nf, rupiah } from "@/lib/data"
 import { Btn, Empty, cx } from "@/components/ui"
 import { Title, th, td, tableWrap, useRange, RangePicker, agg } from "./shared"
+import { exportLaporanAK15 } from "@/lib/excelExport"
 
 interface Props {
   deps: Departure[]
@@ -15,22 +18,36 @@ interface Props {
 export default function LaporanOperasional({ deps, toast }: Props) {
   const r = useRange()
   const [busy, setBusy] = useState(false)
+  const [segments, setSegments] = useState<Segment[]>(SEGMENTS)
+  const [jalurList, setJalurList] = useState<Jalur[]>(JALUR)
+
+  useEffect(() => {
+    getMasterData().then((m) => {
+      if (m.segments?.length) setSegments(m.segments)
+      if (m.jalurList?.length) setJalurList(m.jalurList)
+    })
+  }, [])
   const approved = deps.filter(
     (d) =>
       d.status === "disetujui" && d.date >= r.range[0] && d.date <= r.range[1],
   )
   const t = agg(approved)
-  const download = () => {
+  const download = async () => {
     setBusy(true)
-    setTimeout(() => {
+    try {
+      await exportLaporanAK15(deps, r.range[0], r.range[1], segments, jalurList)
+      toast("Laporan Produksi Bus " + r.range[0] + "_" + r.range[1] + ".xlsx berhasil diunduh")
+    } catch (err) {
+      console.error("Gagal mengunduh berkas Excel:", err)
+      toast("Gagal memproses unduhan Excel")
+    } finally {
       setBusy(false)
-      toast("AK15_" + r.range[0] + "_" + r.range[1] + ".xlsx siap diunduh")
-    }, 1500)
+    }
   }
 
   return (
     <>
-      <Title sub="Susunan mengikuti formulir AK 15. Struktur blok final akan dikonfirmasi dengan berkas contoh DAMRI.">
+      <Title sub="Susunan mengikuti formulir Laporan Produksi Bus.">
         Laporan / Ekspor
       </Title>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -41,7 +58,7 @@ export default function LaporanOperasional({ deps, toast }: Props) {
           ) : (
             <Download size={16} />
           )}
-          {busy ? "Menyiapkan…" : "Unduh .xlsx (susunan AK 15)"}
+          {busy ? "Menyiapkan…" : "Unduh Laporan Produksi.xlsx"}
         </Btn>
       </div>
       <h2 className="mb-3 mt-8 text-xs font-bold uppercase tracking-widest text-navy">
@@ -53,7 +70,7 @@ export default function LaporanOperasional({ deps, toast }: Props) {
         </div>
       ) : (
         <div className="space-y-4">
-          {SEGMENTS.map((s) => {
+          {segments.map((s) => {
             const l = approved.filter((d) => d.segmentId === s.id)
             if (!l.length) return null
             const a = agg(l)
@@ -75,7 +92,7 @@ export default function LaporanOperasional({ deps, toast }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {JALUR.filter((j) => j.segmentId === s.id).map((j) => {
+                    {jalurList.filter((j) => j.segmentId === s.id || (j as any).segmen_id === s.id).map((j) => {
                       const x = agg(l.filter((d) => d.jalurId === j.id))
                       return x.rit ? (
                         <tr key={j.id} className="border-t border-line">

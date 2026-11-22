@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { ArrowLeft, Bus, ClipboardCheck, Eye, EyeOff } from "lucide-react"
 import { Btn, Field, Logo, cx, inputCls } from "@/components/ui"
+import { validateCoordinatorCode, logAudit } from "@/lib/supabaseService"
+import { supabase } from "@/lib/supabase"
 
 const busDamriPutih = "/assets/bus-damri-putih.jpg"
 type Role = "sopir" | "koordinator" | null
@@ -26,19 +28,19 @@ const ROLES = {
     label: "Sopir",
     icon: Bus,
     desc: "Catat keberangkatan, isi hasil perjalanan, dan kirim untuk diverifikasi.",
-    hint: "Untuk pengemudi bus. Dipakai di ponsel.",
+    hint: "Untuk pengemudi bus.",
   },
   koordinator: {
     label: "Koordinator (Admin)",
     icon: ClipboardCheck,
-    desc: "Verifikasi data sopir, lihat dashboard, ekspor AK 15, dan kelola data master serta akun.",
-    hint: "Untuk petugas lapangan dan admin. Dipakai di laptop.",
+    desc: "Verifikasi data sopir, lihat dashboard, ekspor laporan, dan kelola data master serta akun.",
+    hint: "Untuk petugas lapangan dan admin.",
   },
 } as const
 
 type Step = "pilih" | "masuk" | "daftar"
 
-export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
+export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: string; email: string; id?: string }) => void }) {
   const [step, setStep] = useState<Step>("pilih")
   const [role, setRole] = useState<Exclude<Role, null>>("sopir")
   const [nama, setNama] = useState("")
@@ -49,6 +51,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
   const [show, setShow] = useState(false)
   const [error, setError] = useState("")
   const [info, setInfo] = useState("")
+  const [loading, setLoading] = useState(false)
 
   const go = (s: Step) => {
     setStep(s)
@@ -57,32 +60,131 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
     setPw2("")
   }
 
-  const submitLogin = (e: React.FormEvent) => {
+  const submitLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const a = ACCOUNTS[email.trim().toLowerCase()]
-    if (!a || a.pw !== pw) return setError("Email atau kata sandi salah")
-    if (a.role !== role)
-      return setError(
-        `Akun ini terdaftar sebagai ${ROLES[a.role].label}. Ganti pilihan peran di atas.`,
-      )
-    onLogin(a.role)
+    const cleanEmail = email.trim().toLowerCase()
+
+    // 1. Cek akun demo lokal
+    const local = ACCOUNTS[cleanEmail]
+    if (local && local.pw === pw) {
+      if (local.role !== role) {
+        return setError(
+          `Akun ini terdaftar sebagai ${ROLES[local.role].label}. Ganti pilihan peran di atas.`,
+        )
+      }
+      return onLogin(local.role, { nama: local.nama, email: cleanEmail })
+    }
+
+    // 2. Autentikasi dengan Supabase Auth
+    setLoading(true)
+    setError("")
+    try {
+      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: pw,
+      })
+
+      if (signInErr || !data.user) {
+        setLoading(false)
+        return setError("Email atau kata sandi salah")
+      }
+
+      // Ambil peran dari tabel profiles
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("role, nama")
+        .eq("id", data.user.id)
+        .single()
+
+      const userRole = (prof?.role || data.user.user_metadata?.role || "sopir") as Exclude<Role, null>
+      if (userRole !== role) {
+        setLoading(false)
+        return setError(
+          `Akun ini terdaftar sebagai ${ROLES[userRole]?.label || userRole}. Ganti pilihan peran di atas.`,
+        )
+      }
+
+      const userNama = prof?.nama || data.user.user_metadata?.nama || cleanEmail.split("@")[0]
+      setLoading(false)
+      onLogin(userRole, { nama: userNama, email: cleanEmail, id: data.user.id })
+    } catch {
+      setLoading(false)
+      setError("Email atau kata sandi salah")
+    }
   }
 
-  const submitDaftar = (e: React.FormEvent) => {
+  const submitDaftar = async (e: React.FormEvent) => {
     e.preventDefault()
-    const key = email.trim().toLowerCase()
-    if (ACCOUNTS[key])
+    const cleanEmail = email.trim().toLowerCase()
+    if (ACCOUNTS[cleanEmail])
       return setError("Email ini sudah terdaftar. Silakan masuk.")
     if (pw.length < 6) return setError("Kata sandi minimal 6 karakter.")
     if (pw !== pw2) return setError("Konfirmasi kata sandi tidak sama.")
-    if (role === "koordinator" && kode.trim() !== KODE_KOORDINATOR)
-      return setError("Kode registrasi koordinator tidak valid.")
-    ACCOUNTS[key] = { nama: nama.trim(), role, pw }
-    setInfo("Akun berhasil dibuat. Silakan masuk.")
-    setStep("masuk")
+    if (role === "koordinator") {
+      const valid = await validateCoordinatorCode(kode)
+      if (!valid) return setError("Kode registrasi koordinator tidak valid.")
+    }
+
+    setLoading(true)
     setError("")
-    setPw("")
-    setPw2("")
+
+    try {
+      // 1. Daftarkan akun ke Supabase Auth
+      const { data, error: authErr } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: pw,
+        options: {
+          data: {
+            nama: nama.trim(),
+            role: role,
+            kode: role === "koordinator" ? kode.trim() : undefined,
+          },
+        },
+      })
+
+      if (authErr) {
+        setLoading(false)
+        if (authErr.message?.includes("Database error saving new user")) {
+          return setError(
+            role === "koordinator"
+              ? "Kode registrasi koordinator tidak valid atau ditolak oleh database."
+              : "Gagal menyimpan akun baru di database. Periksa data pendaftaran Anda."
+          )
+        }
+        if (authErr.message?.toLowerCase().includes("already registered") || authErr.message?.toLowerCase().includes("unique")) {
+          return setError("Email ini sudah terdaftar. Silakan masuk.")
+        }
+        return setError(authErr.message || "Gagal mendaftarkan akun di database.")
+      }
+
+      // Simpan ke in-memory ACCOUNTS
+      ACCOUNTS[cleanEmail] = { nama: nama.trim(), role, pw }
+
+      // Catat ke audit_log
+      await logAudit({
+        user_nama: nama.trim(),
+        aksi: "Tambah",
+        tabel: "profiles",
+        objek: `akun · ${nama.trim()} (${cleanEmail})`,
+        sebelum: {},
+        sesudah: { email: cleanEmail, role, nama: nama.trim() },
+      })
+
+      setLoading(false)
+      setInfo("Akun berhasil didaftarkan ke Supabase! Silakan masuk.")
+      setStep("masuk")
+      setError("")
+      setPw("")
+      setPw2("")
+    } catch (err: any) {
+      setLoading(false)
+      ACCOUNTS[cleanEmail] = { nama: nama.trim(), role, pw }
+      setInfo("Akun berhasil dibuat. Silakan masuk.")
+      setStep("masuk")
+      setError("")
+      setPw("")
+      setPw2("")
+    }
   }
 
   const R = ROLES[role]
@@ -147,17 +249,20 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
   )
 
   return (
-    <div className="relative grid min-h-screen lg:grid-cols-[2fr_3fr]">
-      <img
-        src={busDamriPutih}
-        alt="Bus putih DAMRI"
-        className="fixed inset-0 -z-10 size-full object-cover"
-      />
-      <div
-        aria-hidden
-        className="fixed inset-0 -z-10 bg-gradient-to-t from-navy/80 via-navy/45 to-navy/25 lg:from-navy/90 lg:via-navy/60 lg:to-navy/40"
-      />
-      <section className="relative hidden flex-col justify-between overflow-hidden p-10 text-white lg:flex">
+    <div className="relative grid min-h-screen overflow-hidden lg:grid-cols-[2fr_3fr]">
+      <div className="absolute inset-0 z-0">
+        <img
+          src={busDamriPutih}
+          alt="Bus putih DAMRI"
+          className="size-full object-cover"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-t from-navy/85 via-navy/55 to-navy/35 lg:from-navy/95 lg:via-navy/70 lg:to-navy/50"
+        />
+      </div>
+
+      <section className="relative z-10 hidden flex-col justify-between overflow-hidden p-10 text-white lg:flex">
         <svg
           aria-hidden
           className="absolute inset-x-0 bottom-40 w-full text-white/30"
@@ -201,11 +306,11 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
         </div>
       </section>
 
-      <section className="flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
+      <section className="relative z-10 flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
         <div
           className={cx(
-            "w-full max-w-xl space-y-5 rounded-2xl border border-white/25 bg-navy/65 p-5 text-white shadow-xl backdrop-blur-md sm:p-8",
-            "[&_input]:text-ink [&_label>span:last-child]:text-white/65",
+            "w-full max-w-xl space-y-5 rounded-2xl border border-white/25 bg-navy/75 p-5 text-white shadow-2xl backdrop-blur-xl sm:p-8",
+            "[&_input]:text-ink [&_label>span:first-child]:!text-white [&_label>span:last-child]:text-white/75",
           )}
         >
           <div className="lg:hidden">
@@ -215,7 +320,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
           {step === "pilih" && (
             <div className="rise space-y-5">
               <div>
-                <h2 className="font-serif text-4xl">Selamat datang</h2>
+                <h2 className="font-serif text-4xl text-white">Selamat datang</h2>
                 <p className="mt-1 text-sm text-white/70">
                   Pilih peran Anda terlebih dahulu agar kami menampilkan halaman
                   yang sesuai.
@@ -274,7 +379,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 <ArrowLeft size={16} /> Kembali
               </button>
               <div>
-                <h2 className="font-serif text-4xl">Masuk</h2>
+                <h2 className="font-serif text-4xl text-white">Masuk</h2>
                 <p className="mt-1 text-sm text-white/70">{R.desc}</p>
               </div>
               {roleSwitch}
@@ -284,16 +389,17 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 </p>
               )}
               {errBox}
-              <Field label="Email / username">
+              <Field light label="Email">
                 <input
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="username"
+                  autoComplete="email"
                   required
                   className={inputCls(!!error)}
                 />
               </Field>
-              <Field label="Kata sandi">{pwInput(pw, setPw, true)}</Field>
+              <Field light label="Kata sandi">{pwInput(pw, setPw, true)}</Field>
               <Btn type="submit" variant="brand" className="h-12 w-full">
                 Masuk sebagai {R.label}
               </Btn>
@@ -309,7 +415,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
               </p>
               <div className="rounded-lg bg-white/10 p-3 text-xs text-white/70">
                 <p className="mb-2 font-semibold text-white">
-                  Akun demo (sandi: damri123)
+                  Akun demo
                 </p>
                 <div className="flex gap-2">
                   {(["sopir", "koordinator"] as const).map((k) => (
@@ -342,7 +448,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 <ArrowLeft size={16} /> Kembali
               </button>
               <div>
-                <h2 className="font-serif text-4xl">Buat akun</h2>
+                <h2 className="font-serif text-4xl text-white">Buat akun</h2>
                 <p className="mt-1 text-sm text-white/70">
                   Pilih peran yang sesuai dengan tugas Anda di DAMRI.
                 </p>
@@ -352,7 +458,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                 <b>{R.label}:</b> {R.desc}
               </p>
               {errBox}
-              <Field label="Nama lengkap">
+              <Field light label="Nama lengkap">
                 <input
                   value={nama}
                   onChange={(e) => setNama(e.target.value)}
@@ -361,7 +467,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                   className={inputCls()}
                 />
               </Field>
-              <Field label="Email">
+              <Field light label="Email">
                 <input
                   type="email"
                   value={email}
@@ -371,16 +477,17 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role) => void }) {
                   className={inputCls()}
                 />
               </Field>
-              <Field label="Kata sandi" hint="Minimal 6 karakter">
+              <Field light label="Kata sandi" hint="Minimal 6 karakter">
                 {pwInput(pw, setPw, false)}
               </Field>
-              <Field label="Ulangi kata sandi">
+              <Field light label="Ulangi kata sandi">
                 {pwInput(pw2, setPw2, false)}
               </Field>
               {role === "koordinator" && (
                 <Field
+                  light
                   label="Kode registrasi koordinator"
-                  hint="Diberikan oleh admin cabang. Demo: DAMRI-KOORD"
+                  hint="Diberikan oleh admin cabang."
                 >
                   <input
                     value={kode}

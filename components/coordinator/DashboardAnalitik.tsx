@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getMasterData } from "@/lib/supabaseService"
+import type { Segment, Jalur } from "@/lib/data"
 import { Clock3, Download } from "lucide-react"
 import {
   Bar,
@@ -33,6 +35,15 @@ interface Props {
 export default function DashboardAnalitik({ deps, go }: Props) {
   const r = useRange()
   const [sg, setSg] = useState("all")
+  const [segments, setSegments] = useState<Segment[]>(SEGMENTS)
+  const [jalurList, setJalurList] = useState<Jalur[]>(JALUR)
+
+  useEffect(() => {
+    getMasterData().then((m) => {
+      if (m.segments?.length) setSegments(m.segments)
+      if (m.jalurList?.length) setJalurList(m.jalurList)
+    })
+  }, [])
   const approved = deps.filter(
     (d) =>
       d.status === "disetujui" && d.date >= r.range[0] && d.date <= r.range[1],
@@ -40,7 +51,7 @@ export default function DashboardAnalitik({ deps, go }: Props) {
   const scoped =
     sg === "all" ? approved : approved.filter((d) => d.segmentId === sg)
   const t = agg(approved)
-  const bySeg = SEGMENTS.map((s) => ({
+  const bySeg = segments.map((s) => ({
     id: s.id,
     nama: s.nama,
     ...agg(approved.filter((d) => d.segmentId === s.id)),
@@ -50,7 +61,7 @@ export default function DashboardAnalitik({ deps, go }: Props) {
     tgl: fmtDate(day).slice(0, 6),
     pendapatan: agg(scoped.filter((d) => d.date === day)).total,
   }))
-  const perJalur = JALUR.map((j) => ({
+  const perJalur = jalurList.map((j) => ({
     j,
     ...agg(scoped.filter((d) => d.jalurId === j.id)),
   })).filter((x) => x.rit > 0)
@@ -68,15 +79,15 @@ export default function DashboardAnalitik({ deps, go }: Props) {
     <>
       <Title
         sub="Hanya keberangkatan berstatus Disetujui yang dihitung."
-        right={
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <div className="flex items-center gap-3 rounded-xl border border-line bg-white px-4 py-2.5 shadow-sm">
-              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy">
-                <Clock3 size={18} />
+                right={
+          <div className="flex w-full items-center gap-2.5 sm:w-auto">
+            <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-white px-3 shadow-2xs sm:w-auto sm:flex-initial sm:px-3.5">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy">
+                <Clock3 size={15} />
               </span>
-              <LiveDateTime align="right" />
+              <LiveDateTime compact />
             </div>
-            <Btn onClick={() => go("laporan")}>
+            <Btn onClick={() => go("laporan")} className="h-11 shrink-0 px-4">
               <Download size={16} /> Ekspor
             </Btn>
           </div>
