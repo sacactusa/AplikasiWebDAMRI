@@ -92,10 +92,12 @@ export default function DetailKeberangkatan({ dep, offline, onBack, onSave, onSu
               {fmtDate(d.date)} · {d.time}
             </span>
           </div>
-          <p className="mt-2 font-semibold">{jalur(d.jalurId).nama}</p>
+          <p className="mt-2 font-semibold">{d.jalurNama || jalur(d.jalurId).nama}</p>
           <p className="text-sm text-mute">
-            {s.nama} · <span className="num">{d.cb}</span> ·{" "}
-            <span className="num">{plat(d.cb)}</span>
+            {s.nama} · <span className="num">{d.cb}</span>
+            {plat(d.cb) && plat(d.cb) !== d.cb ? (
+              <> · <span className="num">{plat(d.cb)}</span></>
+            ) : null}
           </p>
         </div>
         {ro && (

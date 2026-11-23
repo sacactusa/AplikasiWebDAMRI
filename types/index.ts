@@ -6,6 +6,7 @@ export interface Segment {
   kontrak: boolean
   nilaiTetap?: number
   aktif: boolean
+  rawId?: string
 }
 
 export interface Jalur {
@@ -14,12 +15,22 @@ export interface Jalur {
   segmentId: string
   tarif: number
   aktif: boolean
+  kmTempuh?: number | null
+  kmEmpty?: number | null
 }
 
 export interface Vehicle {
   cb: string
   plat: string
   aktif: boolean
+  rawId?: string
+}
+
+export interface JenisPenumpang {
+  id: string
+  nama: string
+  aktif: boolean
+  rawId?: string
 }
 
 export interface Departure {

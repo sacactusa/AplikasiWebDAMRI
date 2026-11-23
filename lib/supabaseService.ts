@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
-import type { Departure, Jalur, Segment, Vehicle } from "@/types"
-import { JALUR, SEGMENTS, VEHICLES, SEED, AUDIT } from "./data"
+import type { Departure, Jalur, Segment, Vehicle, JenisPenumpang } from "@/types"
+import { JALUR, SEGMENTS, VEHICLES, SEED, AUDIT, JENIS_PENUMPANG } from "./data"
 
 export interface AuditItem {
   id?: number | string
@@ -46,79 +46,17 @@ export function formatAuditTime(isoStr: string): string {
  * Mengambil data Master (Segmen, Jalur, Kendaraan) dari Supabase
  * dengan fallback ke data lokal jika offline atau terjadi kendala jaringan.
  */
-export async function getMasterData(): Promise<{
+export async function getMasterData(isDemo = false): Promise<{
   segments: Segment[]
   jalurList: Jalur[]
   vehicles: Vehicle[]
+  passengerTypes: JenisPenumpang[]
 }> {
-  try {
-    const [segRes, jalRes, vehRes, tarRes] = await Promise.all([
-      supabase.from("segmen").select("*").order("nama"),
-      supabase.from("jalur").select("*").order("nama"),
-      supabase.from("kendaraan").select("*").order("kode_cb"),
-      supabase
-        .from("tarif_jalur")
-        .select("*")
-        .order("berlaku_mulai", { ascending: false }),
-    ])
-
-    if (segRes.error || !segRes.data || segRes.data.length === 0) {
-      return { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES }
-    }
-
-    // Map Segmen
-    const segMap = new Map<string, string>() // id (uuid) -> kode
-    const segments: Segment[] = segRes.data.map((s) => {
-      segMap.set(s.id, s.kode)
-      return {
-        id: s.kode || s.id,
-        nama: s.nama,
-        kontrak: Boolean(s.kontrak),
-        nilaiTetap: s.nilai_tetap ? Number(s.nilai_tetap) : undefined,
-        aktif: Boolean(s.aktif),
-      }
-    })
-
-    // Map Tarif per jalur_id
-    const tarifMap = new Map<string, number>()
-    if (tarRes.data) {
-      for (const t of tarRes.data) {
-        if (!tarifMap.has(t.jalur_id)) {
-          tarifMap.set(t.jalur_id, Number(t.tarif) || 0)
-        }
-      }
-    }
-
-    // Map Jalur
-    const jalurList: Jalur[] = (jalRes.data || []).map((j) => {
-      const segKode = segMap.get(j.segmen_id) || j.segmen_id
-      return {
-        id: j.id,
-        nama: j.nama,
-        segmentId: segKode,
-        tarif: tarifMap.get(j.id) ?? 0,
-        aktif: Boolean(j.aktif),
-      }
-    })
-
-    // Map Kendaraan
-    const vehicles: Vehicle[] = (vehRes.data || []).map((v) => ({
-      cb: v.kode_cb,
-      plat: v.plat,
-      aktif: Boolean(v.aktif),
-    }))
-
-    return {
-      segments: segments.length ? segments : SEGMENTS,
-      jalurList: jalurList.length ? jalurList : JALUR,
-      vehicles: vehicles.length ? vehicles : VEHICLES,
-    }
-  } catch (err) {
-    console.warn(
-      "Gagal memuat master data dari Supabase, menggunakan fallback lokal:",
-      err,
-    )
-    return { segments: SEGMENTS, jalurList: JALUR, vehicles: VEHICLES }
+  return {
+    segments: SEGMENTS,
+    jalurList: JALUR,
+    vehicles: VEHICLES,
+    passengerTypes: JENIS_PENUMPANG,
   }
 }
 
@@ -296,15 +234,22 @@ export async function createDeparture(
 
     const newId = data.id
 
+    const vehDisplay = d.cb && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.cb) ? d.cb : "Bus"
+    const jalurDisplay = d.jalurNama && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.jalurNama)
+      ? d.jalurNama
+      : (d.jalurId && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.jalurId) ? d.jalurId : "")
+
+    const objek = `Keberangkatan · ${vehDisplay}${jalurDisplay ? ` (${jalurDisplay})` : ""}`
+
     // Catat ke audit_log
     await logAudit({
       user_nama: d.driver,
       aksi: "Tambah",
       tabel: "keberangkatan",
       record_id: newId,
-      objek: `keberangkatan · ${d.cb} (${d.time})`,
+      objek,
       sebelum: {},
-      sesudah: { status: d.status, cb: d.cb, tanggal: d.date, rute: d.jalurId },
+      sesudah: { status: d.status, cb: d.cb, tanggal: d.date, rute: jalurDisplay || d.jalurId },
     })
 
     return { success: true, id: newId }
@@ -348,12 +293,19 @@ export async function updateDeparture(
       return false
     }
 
+    const vehDisplay = d.cb && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.cb) ? d.cb : "Bus"
+    const jalurDisplay = d.jalurNama && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.jalurNama)
+      ? d.jalurNama
+      : (d.jalurId && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.jalurId) ? d.jalurId : "")
+
+    const objek = `Keberangkatan · ${vehDisplay}${jalurDisplay ? ` (${jalurDisplay})` : ""}`
+
     await logAudit({
       user_nama: driverName || d.driver,
       aksi: d.status === "dikirim" ? "Kirim" : "Ubah",
       tabel: "keberangkatan",
       record_id: d.id,
-      objek: `keberangkatan · ${d.id}`,
+      objek,
       sebelum: {},
       sesudah: { status: d.status, kmTempuh: d.kmTempuh, penumpang: d.penumpang },
     })
@@ -371,6 +323,7 @@ export async function updateDeparture(
 export async function approveDeparture(
   id: string,
   coordNama = "Koordinator",
+  depObj?: Departure,
 ): Promise<boolean> {
   try {
     const now = new Date().toISOString()
@@ -388,12 +341,23 @@ export async function approveDeparture(
       return false
     }
 
+    let vehDisplay = "Bus"
+    let jalurDisplay = ""
+    if (depObj) {
+      vehDisplay = depObj.cb && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(depObj.cb) ? depObj.cb : "Bus"
+      jalurDisplay = depObj.jalurNama && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(depObj.jalurNama)
+        ? depObj.jalurNama
+        : (depObj.jalurId && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(depObj.jalurId) ? depObj.jalurId : "")
+    }
+
+    const objek = `Keberangkatan · ${vehDisplay}${jalurDisplay ? ` (${jalurDisplay})` : ""}`
+
     await logAudit({
       user_nama: coordNama,
       aksi: "Setujui",
       tabel: "keberangkatan",
       record_id: id,
-      objek: `keberangkatan · ${id}`,
+      objek,
       sebelum: { status: "dikirim" },
       sesudah: { status: "disetujui" },
     })
@@ -412,6 +376,7 @@ export async function rejectDeparture(
   id: string,
   note: string,
   coordNama = "Koordinator",
+  depObj?: Departure,
 ): Promise<boolean> {
   try {
     const now = new Date().toISOString()
@@ -430,12 +395,23 @@ export async function rejectDeparture(
       return false
     }
 
+    let vehDisplay = "Bus"
+    let jalurDisplay = ""
+    if (depObj) {
+      vehDisplay = depObj.cb && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(depObj.cb) ? depObj.cb : "Bus"
+      jalurDisplay = depObj.jalurNama && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(depObj.jalurNama)
+        ? depObj.jalurNama
+        : (depObj.jalurId && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(depObj.jalurId) ? depObj.jalurId : "")
+    }
+
+    const objek = `Keberangkatan · ${vehDisplay}${jalurDisplay ? ` (${jalurDisplay})` : ""}`
+
     await logAudit({
       user_nama: coordNama,
       aksi: "Tolak",
       tabel: "keberangkatan",
       record_id: id,
-      objek: `keberangkatan · ${id}`,
+      objek,
       sebelum: { status: "dikirim" },
       sesudah: { status: "draft", catatan: note },
     })
@@ -456,19 +432,132 @@ export async function getAuditLogs(): Promise<AuditItem[]> {
       .from("audit_log")
       .select("*")
       .order("waktu", { ascending: false })
-      .limit(100)
+      .limit(200)
 
     if (error || !data || data.length === 0) {
       return AUDIT
     }
 
-    return data.map((row) => ({
+    // 1. Ambil data keberangkatan aktif untuk pemetaan UUID -> (Plat / CB & Nama Rute)
+    const depMap = new Map<string, { cb: string; jalur: string }>()
+    try {
+      const { data: depList } = await supabase
+        .from("v_keberangkatan")
+        .select("id, cb, jalur_nama")
+        .limit(200)
+
+      if (depList) {
+        for (const item of depList) {
+          if (item.id) {
+            depMap.set(item.id.toLowerCase(), {
+              cb: item.cb || "Bus",
+              jalur: item.jalur_nama || "",
+            })
+          }
+        }
+      }
+    } catch {}
+
+    // Tambahkan data demo/seed ke depMap
+    for (const s of SEED) {
+      depMap.set(s.id.toLowerCase(), {
+        cb: s.cb,
+        jalur: s.jalurNama || s.jalurId,
+      })
+    }
+
+    // 2. Kumpulkan pemetaan dari entri audit yang sudah memiliki label jelas
+    for (const row of data) {
+      const recId = (row.record_id || "").toLowerCase()
+      const obj = row.objek || ""
+      const isDescriptive =
+        obj.toLowerCase().includes("keberangkatan") &&
+        !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(obj.replace(/^[a-z]+\s*·\s*/i, ""))
+
+      if (recId && isDescriptive) {
+        const cleanAfterPrefix = obj.replace(/^keberangkatan\s*·\s*/i, "")
+        const parts = cleanAfterPrefix.split("(")
+        const cb = parts[0].trim()
+        const jalur = parts[1] ? parts[1].replace(/\)$/, "").trim() : ""
+        depMap.set(recId, { cb: cb || "Bus", jalur })
+      }
+    }
+
+    // Helper untuk mengubah objek kode/UUID menjadi nama yang sinkron dengan master data
+    const resolveObjek = (row: typeof data[0]): string => {
+      let obj = (row.objek || "").trim()
+      const rawMatch = obj.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+      const uuid = rawMatch ? rawMatch[0].toLowerCase() : (row.record_id || "").toLowerCase()
+
+      if (uuid && (obj.toLowerCase().startsWith("keberangkatan") || rawMatch)) {
+        if (depMap.has(uuid)) {
+          const info = depMap.get(uuid)!
+          return `Keberangkatan · ${info.cb}${info.jalur ? ` (${info.jalur})` : ""}`
+        }
+        if (row.sesudah?.cb || row.sesudah?.plat || row.sebelum?.cb) {
+          const cb = row.sesudah?.cb || row.sesudah?.plat || row.sebelum?.cb || "Bus"
+          const rute = row.sesudah?.rute || row.sesudah?.jalur || ""
+          return `Keberangkatan · ${cb}${rute ? ` (${rute})` : ""}`
+        }
+        // Cari pasangan entri di waktu yang sama yang memiliki deskripsi jelas
+        const pair = data.find(
+          (other) =>
+            other.id !== row.id &&
+            other.waktu &&
+            row.waktu &&
+            other.waktu.slice(0, 16) === row.waktu.slice(0, 16) &&
+            other.objek &&
+            !/[0-9a-f]{8}-[0-9a-f]{4}/i.test(other.objek) &&
+            other.objek.toLowerCase().includes("keberangkatan"),
+        )
+        if (pair && pair.objek) {
+          return pair.objek
+        }
+        return "Keberangkatan · Bus Operasional"
+      }
+
+      if (!obj) {
+        return `${row.tabel || "Data"} #${row.record_id || ""}`.trim()
+      }
+      return obj
+    }
+
+    // 3. Bersihkan duplikasi antara database trigger dan client log
+    const seen = new Map<string, typeof data[0] & { resolvedObjek: string }>()
+    for (const row of data) {
+      const resolved = resolveObjek(row)
+      const minuteKey = row.waktu ? row.waktu.slice(0, 16) : ""
+      const actionKey = (row.aksi || "").trim().toLowerCase()
+      const rawMatch = (row.objek || "").match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+      const uuidKey = rawMatch ? rawMatch[0].toLowerCase() : (row.record_id || "").toLowerCase()
+
+      // Buat dedupKey terpadu
+      const dedupKey = uuidKey
+        ? `${uuidKey}_${actionKey}_${minuteKey}`
+        : `${resolved}_${actionKey}_${minuteKey}`
+
+      if (!seen.has(dedupKey)) {
+        seen.set(dedupKey, { ...row, resolvedObjek: resolved })
+      } else {
+        const existing = seen.get(dedupKey)!
+        const isBetter =
+          (row.objek && !/[0-9a-f]{8}-[0-9a-f]{4}/i.test(row.objek)) ||
+          Object.keys(row.sesudah || {}).length > Object.keys(existing.sesudah || {}).length
+        if (isBetter) {
+          seen.set(dedupKey, { ...row, resolvedObjek: resolved })
+        }
+      }
+    }
+
+    const uniqueRows = Array.from(seen.values())
+
+    return uniqueRows.map((row) => ({
       id: row.id,
       t: formatAuditTime(row.waktu),
       rawTime: row.waktu,
       u: row.user_nama || "Sistem",
       a: row.aksi,
-      o: row.objek || `${row.tabel} #${row.record_id || ""}`.trim(),
+      o: row.resolvedObjek,
       before: row.sebelum || {},
       after: row.sesudah || {},
     }))

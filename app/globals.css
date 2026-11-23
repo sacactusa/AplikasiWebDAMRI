@@ -116,10 +116,17 @@ textarea:focus-visible {
 .pop {
   animation: pop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
+
+/* Sembunyikan tombol bawaan reveal password dari browser (Microsoft Edge / IE) agar tidak ganda dengan toggle kustom */
+input::-ms-reveal,
+input::-ms-clear,
+::-ms-reveal,
+::-ms-clear {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
 
 /* Sembunyikan Next.js dev indicator badge */
 nextjs-portal,

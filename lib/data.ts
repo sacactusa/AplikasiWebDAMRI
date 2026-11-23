@@ -6,6 +6,7 @@ export interface Segment {
   kontrak: boolean
   nilaiTetap?: number
   aktif: boolean
+  rawId?: string
 }
 export interface Jalur {
   id: string
@@ -13,11 +14,20 @@ export interface Jalur {
   segmentId: string
   tarif: number
   aktif: boolean
+  kmTempuh?: number | null
+  kmEmpty?: number | null
 }
 export interface Vehicle {
   cb: string
   plat: string
   aktif: boolean
+  rawId?: string
+}
+export interface JenisPenumpang {
+  id: string
+  nama: string
+  aktif: boolean
+  rawId?: string
 }
 export interface Departure {
   id: string
@@ -52,14 +62,14 @@ export const SEGMENTS: Segment[] = [
 ]
 
 export const JALUR: Jalur[] = [
-  { id: 'j1', nama: 'Dipatiukur – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true },
-  { id: 'j2', nama: 'Kota Baru Parahyangan – Soekarno-Hatta', segmentId: 'bandara', tarif: 160000, aktif: true },
-  { id: 'j3', nama: 'Cicaheum – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true },
-  { id: 'j4', nama: 'Bandung – Garut', segmentId: 'akap', tarif: 55000, aktif: true },
-  { id: 'j5', nama: 'Bandung – Cirebon', segmentId: 'akap', tarif: 85000, aktif: true },
-  { id: 'j6', nama: 'Jemputan Karyawan Cimahi', segmentId: 'jemputan', tarif: 0, aktif: true },
-  { id: 'j7', nama: 'Borongan Wisata Lembang', segmentId: 'borongan', tarif: 0, aktif: true },
-  { id: 'j8', nama: 'Haji Embarkasi Bandung', segmentId: 'haji', tarif: 0, aktif: true },
+  { id: 'j1', nama: 'Dipatiukur – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true, kmTempuh: 165, kmEmpty: 5 },
+  { id: 'j2', nama: 'Kota Baru Parahyangan – Soekarno-Hatta', segmentId: 'bandara', tarif: 160000, aktif: true, kmTempuh: 180, kmEmpty: 8 },
+  { id: 'j3', nama: 'Cicaheum – Soekarno-Hatta', segmentId: 'bandara', tarif: 150000, aktif: true, kmTempuh: 170, kmEmpty: 5 },
+  { id: 'j4', nama: 'Bandung – Garut', segmentId: 'akap', tarif: 55000, aktif: true, kmTempuh: 65, kmEmpty: 2 },
+  { id: 'j5', nama: 'Bandung – Cirebon', segmentId: 'akap', tarif: 85000, aktif: true, kmTempuh: 130, kmEmpty: 4 },
+  { id: 'j6', nama: 'Jemputan Karyawan Cimahi', segmentId: 'jemputan', tarif: 0, aktif: true, kmTempuh: 35, kmEmpty: 0 },
+  { id: 'j7', nama: 'Borongan Wisata Lembang', segmentId: 'borongan', tarif: 0, aktif: true, kmTempuh: 40, kmEmpty: 0 },
+  { id: 'j8', nama: 'Haji Embarkasi Bandung', segmentId: 'haji', tarif: 0, aktif: true, kmTempuh: 85, kmEmpty: 0 },
 ]
 
 export const VEHICLES: Vehicle[] = [
@@ -71,6 +81,13 @@ export const VEHICLES: Vehicle[] = [
   { cb: 'CB-1072', plat: 'D 7072 AD', aktif: false },
 ]
 
+export const JENIS_PENUMPANG: JenisPenumpang[] = [
+  { id: 'umum', nama: 'Umum', aktif: true },
+  { id: 'pm', nama: 'Pelajar / Mahasiswa (P/M)', aktif: true },
+  { id: 'lansia', nama: 'Lansia / Disabilitas', aktif: true },
+  { id: 'tni-polri', nama: 'TNI / Polri', aktif: false },
+]
+
 export const DRIVERS = ['Asep Suryana', 'Dedi Kurniawan', 'Hendra Gunawan', 'Yayan Sopian', 'Iwan Setiawan']
 
 export const rupiah = (n: number | null | undefined) =>
@@ -78,23 +95,53 @@ export const rupiah = (n: number | null | undefined) =>
 export const nf = (n: number | null | undefined) => (n == null ? '–' : Math.round(n).toLocaleString('id-ID'))
 export const fmtDate = (iso: string) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-export const seg = (id: string) =>
-  SEGMENTS.find((s) => s.id === id || (s as any).kode === id) || {
+
+const isUUID = (str?: string) =>
+  Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim()))
+
+export const seg = (id: string) => {
+  const found = SEGMENTS.find((s) => s.id === id || (s as any).kode === id || (s as any).rawId === id)
+  if (found) return found
+  if (isUUID(id)) {
+    return { id: "bandara", nama: "Bandara", kontrak: false, aktif: true }
+  }
+  return {
     id: id || "bandara",
-    nama: id === "bandara" ? "Bandara" : id === "akap" ? "Antar Kota" : id || "Segmen",
+    nama: id === "bandara" ? "Bandara" : id === "akap" ? "Antar Kota" : (id || "Segmen"),
     kontrak: false,
     aktif: true,
   }
+}
 
-export const jalur = (id: string) =>
-  JALUR.find((j) => j.id === id || j.nama === id) || {
+export const jalur = (id: string) => {
+  const found = JALUR.find((j) => j.id === id || j.nama === id || (j as any).rawId === id)
+  if (found) return found
+  if (isUUID(id)) {
+    return {
+      id: "j1",
+      nama: "Dipatiukur – Soekarno-Hatta",
+      segmentId: "bandara",
+      tarif: 150000,
+      aktif: true,
+    }
+  }
+  return {
     id: id || "j1",
-    nama: id || "Dipatiukur - Soekarno-Hatta",
+    nama: id || "Dipatiukur – Soekarno-Hatta",
     segmentId: "bandara",
     tarif: 150000,
     aktif: true,
   }
-export const plat = (cb: string) => VEHICLES.find((v) => v.cb === cb)?.plat ?? ''
+}
+
+export const plat = (cb: string) => {
+  if (!cb) return ""
+  if (isUUID(cb)) return "D 7021 AB"
+  const v = VEHICLES.find((x) => x.cb === cb || x.plat === cb)
+  if (v) return v.plat
+  if (/^[A-Z]{1,2}\s+[0-9]/i.test(cb.trim())) return cb.trim()
+  return ""
+}
 
 export function calc(d: Pick<Departure, 'segmentId' | 'jalurId' | 'penumpang' | 'pendapatan' | 'subsidi' | 'bagasi' | 'kmTempuh'>) {
   const s = seg(d.segmentId)
@@ -195,10 +242,24 @@ export const INCOMING: Departure[] = [
 ]
 
 export const AUDIT = [
-  { t: '16 Okt 2026 09:12', u: 'Rina Marlina', a: 'Setujui', o: 'keberangkatan #d117', before: { status: 'dikirim' }, after: { status: 'disetujui' } },
+  {
+    t: '16 Okt 2026 10:15',
+    u: 'Rina Marlina',
+    a: 'Unduh Laporan',
+    o: 'Laporan Produksi Bus AK 15 (01 Okt 2026 s/d 16 Okt 2026)',
+    before: {},
+    after: {
+      periode: '01 Okt 2026 s/d 16 Okt 2026',
+      total_perjalanan: 28,
+      total_penumpang: 842,
+      total_pendapatan: 'Rp 68.200.000',
+      format: 'Excel (.xlsx)',
+    },
+  },
+  { t: '16 Okt 2026 09:12', u: 'Rina Marlina', a: 'Setujui', o: 'Keberangkatan · CB-1034 (Dipatiukur - Soekarno-Hatta)', before: { status: 'dikirim' }, after: { status: 'disetujui' } },
   { t: '16 Okt 2026 08:47', u: 'Rina Marlina', a: 'Ubah', o: 'tarif · Dipatiukur – Soekarno-Hatta', before: { tarif: 'Rp 140.000', berlaku_mulai: '01 Jan 2026' }, after: { tarif: 'Rp 150.000', berlaku_mulai: '01 Okt 2026' } },
-  { t: '15 Okt 2026 16:30', u: 'Rina Marlina', a: 'Tolak', o: 'keberangkatan #d101', before: { status: 'dikirim', penumpang: 21 }, after: { status: 'draft', catatan: 'Jumlah penumpang tidak sesuai manifest' } },
+  { t: '15 Okt 2026 16:30', u: 'Rina Marlina', a: 'Tolak', o: 'Keberangkatan · CB-1045 (Kebon Kawung - Soekarno-Hatta)', before: { status: 'dikirim', penumpang: 21 }, after: { status: 'draft', catatan: 'Jumlah penumpang tidak sesuai manifest' } },
   { t: '15 Okt 2026 11:05', u: 'Budi Hartono', a: 'Tambah', o: 'akun · Iwan Setiawan', before: {}, after: { peran: 'Sopir', aktif: 'ya' } },
-  { t: '14 Okt 2026 20:00', u: 'Sistem', a: 'Backup', o: 'database', before: {}, after: { status: 'Berhasil', ukuran: '48,2 MB' } },
+  { t: '14 Okt 2026 20:00', u: 'Rina Marlina', a: 'Backup', o: 'database · snapshot mandiri', before: {}, after: { status: 'Berhasil', ukuran: '48,2 MB' } },
   { t: '14 Okt 2026 10:21', u: 'Budi Hartono', a: 'Nonaktifkan', o: 'kendaraan · CB-1072', before: { aktif: 'ya' }, after: { aktif: 'tidak' } },
 ]

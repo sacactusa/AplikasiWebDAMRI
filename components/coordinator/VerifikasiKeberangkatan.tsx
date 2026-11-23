@@ -36,8 +36,42 @@ interface Props {
   toast: (t: string, type?: "success" | "error") => void
   go: (p: Page) => void
   clearNew: () => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
-export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clearNew }: Props) {
+
+const getJalurNama = (d: Departure) => {
+  if (d.jalurNama && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.jalurNama)) return d.jalurNama
+  const j = JALUR.find((x) => x.id === d.jalurId || x.nama === d.jalurId)
+  if (j) return j.nama
+  if (d.jalurId && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.jalurId)) return d.jalurId
+  return "Dipatiukur – Soekarno-Hatta"
+}
+
+const getSegmenNama = (d: Departure) => {
+  const s = SEGMENTS.find((x) => x.id === d.segmentId || (x as any).kode === d.segmentId || x.rawId === d.segmentId)
+  if (s) return s.nama
+  if (d.segmentId && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.segmentId)) return d.segmentId
+  return "Bandara"
+}
+
+const getVehDisplay = (d: Departure) => {
+  if (d.cb && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.cb)) {
+    const v = VEHICLES.find((x) => x.cb === d.cb || x.plat === d.cb)
+    if (v) return `${v.cb} · ${v.plat}`
+    return d.cb
+  }
+  return "CB-1021 · D 7021 AB"
+}
+
+const getVehShort = (d: Departure) => {
+  if (d.cb && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(d.cb)) {
+    return d.cb
+  }
+  const v = VEHICLES.find((x) => x.rawId === d.cb)
+  return v ? v.cb : "CB-1021"
+}
+
+export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clearNew, currentUser }: Props) {
   const [fd, setFd] = useState("")
   const [fs, setFs] = useState("")
   const [fj, setFj] = useState("")
@@ -47,6 +81,8 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
   const [bulk, setBulk] = useState(false)
   const [rej, setRej] = useState<string | null>(null)
   const [note, setNote] = useState("")
+
+  const coordName = currentUser?.nama || "Koordinator"
 
   const driverOptions = useMemo(
     () => Array.from(new Set([...DRIVERS, ...deps.map((d) => d.driver).filter(Boolean)])),
@@ -83,7 +119,10 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
         ids.includes(d.id) ? { ...d, status: "disetujui", isNew: false } : d,
       ),
     )
-    ids.forEach((id) => approveDeparture(id, "Koordinator"))
+    ids.forEach((id) => {
+      const depObj = deps.find((d) => d.id === id)
+      approveDeparture(id, coordName, depObj)
+    })
     setSel((s) => s.filter((x) => !ids.includes(x)))
     setOpen(null)
     toast(
@@ -100,7 +139,10 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           : d,
       ),
     )
-    if (rej) rejectDeparture(rej, note.trim(), "Koordinator")
+    if (rej) {
+      const depObj = deps.find((d) => d.id === rej)
+      rejectDeparture(rej, note.trim(), coordName, depObj)
+    }
     setRej(null)
     setOpen(null)
     setNote("")
@@ -274,11 +316,11 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
                       )}
                     </td>
                     <td className={td}>{d.driver}</td>
-                    <td className={td}>{seg(d.segmentId).nama}</td>
+                    <td className={td}>{getSegmenNama(d)}</td>
                     <td className={cx(td, "max-w-[220px] truncate")}>
-                      {jalur(d.jalurId).nama}
+                      {getJalurNama(d)}
                     </td>
-                    <td className={cx(td, "num whitespace-nowrap")}>{d.cb}</td>
+                    <td className={cx(td, "num whitespace-nowrap")}>{getVehShort(d)}</td>
                     <td className={cx(td, "num text-right")}>
                       {nf(d.kmTempuh)}
                     </td>
@@ -416,9 +458,9 @@ function DetailBody({ d }: { d: Departure }) {
   const rows: [string, string][] = [
     ["Tanggal", `${fmtDate(d.date)} · ${d.time}`],
     ["Sopir", d.driver],
-    ["Segmen", seg(d.segmentId).nama],
-    ["Jalur", jalur(d.jalurId).nama],
-    ["Kendaraan", `${d.cb} · ${plat(d.cb)}`],
+    ["Segmen", getSegmenNama(d)],
+    ["Jalur", getJalurNama(d)],
+    ["Kendaraan", getVehDisplay(d)],
     ["KM tempuh", nf(d.kmTempuh) + " km"],
     ["KM empty", nf(d.kmEmpty) + " km"],
     ["Penumpang", nf(d.penumpang)],

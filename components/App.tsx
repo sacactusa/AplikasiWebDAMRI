@@ -52,8 +52,6 @@ export default function App() {
     const id = ++tid.current
     setToasts((t) => [...t, { id, text, type }])
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800)
-<<<<<<< HEAD
-=======
   }, [])
 
   const handleLogin = useCallback((r: Role, u?: { nama: string; email: string; id?: string }) => {
@@ -85,18 +83,18 @@ export default function App() {
     }
     setCurrentUser(null)
     setRole(null)
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
   }, [])
 
   const approveMine = useCallback(
     (id: string) => {
+      let target: Departure | undefined
       setDeps((p) => {
         const d = p.find((x) => x.id === id)
         if (!d || d.status !== "dikirim") return p
-
+        target = d
         return p.map((x) => (x.id === id ? { ...x, status: "disetujui" } : x))
       })
-      approveDeparture(id, "Sistem")
+      approveDeparture(id, "Sistem", target)
     },
     [],
   )
@@ -161,11 +159,7 @@ export default function App() {
     <>
       {offline && role && <OfflineBanner />}
       <Toasts items={toasts} onClear={() => setToasts([])} />
-<<<<<<< HEAD
-      {!role && <FormLogin onLogin={setRole} />}
-=======
       {!role && <FormLogin onLogin={handleLogin} />}
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
       {role === "sopir" && (
         <Driver
           deps={deps}

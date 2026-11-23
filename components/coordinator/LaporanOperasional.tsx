@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getMasterData } from "@/lib/supabaseService"
+import { getMasterData, logAudit } from "@/lib/supabaseService"
 import type { Segment, Jalur } from "@/lib/data"
 import { Download, LoaderCircle } from "lucide-react"
 import type { Departure } from "@/lib/data"
@@ -13,9 +13,10 @@ import { exportLaporanAK15 } from "@/lib/excelExport"
 interface Props {
   deps: Departure[]
   toast: (t: string) => void
+  currentUser?: { nama: string; email: string; id?: string } | null
 }
 
-export default function LaporanOperasional({ deps, toast }: Props) {
+export default function LaporanOperasional({ deps, toast, currentUser }: Props) {
   const r = useRange()
   const [busy, setBusy] = useState(false)
   const [segments, setSegments] = useState<Segment[]>(SEGMENTS)
@@ -36,7 +37,25 @@ export default function LaporanOperasional({ deps, toast }: Props) {
     setBusy(true)
     try {
       await exportLaporanAK15(deps, r.range[0], r.range[1], segments, jalurList)
-      toast("Laporan Produksi Bus " + r.range[0] + "_" + r.range[1] + ".xlsx berhasil diunduh")
+      const filename = "Laporan Produksi Bus " + r.range[0] + "_" + r.range[1] + ".xlsx"
+      toast(filename + " berhasil diunduh")
+
+      // Catat aktivitas unduh laporan ke Audit Log
+      await logAudit({
+        user_nama: currentUser?.nama || "Koordinator",
+        aksi: "Unduh Laporan",
+        tabel: "laporan",
+        objek: `Laporan Produksi Bus AK 15 (${r.range[0]} s/d ${r.range[1]})`,
+        sebelum: {},
+        sesudah: {
+          periode: `${r.range[0]} s/d ${r.range[1]}`,
+          total_perjalanan: approved.length,
+          total_rit: t.rit,
+          total_penumpang: t.pnp,
+          total_pendapatan: rupiah(t.total),
+          berkas: filename,
+        },
+      })
     } catch (err) {
       console.error("Gagal mengunduh berkas Excel:", err)
       toast("Gagal memproses unduhan Excel")

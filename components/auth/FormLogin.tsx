@@ -49,6 +49,7 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
   const [pw2, setPw2] = useState("")
   const [kode, setKode] = useState("")
   const [show, setShow] = useState(false)
+  const [show2, setShow2] = useState(false)
   const [error, setError] = useState("")
   const [info, setInfo] = useState("")
   const [loading, setLoading] = useState(false)
@@ -58,6 +59,8 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
     setError("")
     setPw("")
     setPw2("")
+    setShow(false)
+    setShow2(false)
   }
 
   const submitLogin = async (e: React.FormEvent) => {
@@ -227,10 +230,16 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
     </p>
   )
 
-  const pwInput = (value: string, set: (v: string) => void, cur: boolean) => (
+  const pwInput = (
+    value: string,
+    set: (v: string) => void,
+    cur: boolean,
+    isVisible: boolean,
+    toggleVisible: () => void,
+  ) => (
     <div className="relative">
       <input
-        type={show ? "text" : "password"}
+        type={isVisible ? "text" : "password"}
         value={value}
         onChange={(e) => set(e.target.value)}
         autoComplete={cur ? "current-password" : "new-password"}
@@ -239,11 +248,12 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
       />
       <button
         type="button"
-        aria-label={show ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
-        onClick={() => setShow((x) => !x)}
-        className="absolute right-1 top-1/2 grid size-10 -translate-y-1/2 place-items-center text-mute"
+        tabIndex={-1}
+        aria-label={isVisible ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+        onClick={toggleVisible}
+        className="absolute right-1 top-1/2 grid size-10 -translate-y-1/2 place-items-center text-slate-400 hover:text-slate-600 focus:outline-none transition-colors cursor-pointer"
       >
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        {isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
       </button>
     </div>
   )
@@ -399,7 +409,9 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
                   className={inputCls(!!error)}
                 />
               </Field>
-              <Field light label="Kata sandi">{pwInput(pw, setPw, true)}</Field>
+              <Field light label="Kata sandi">
+                {pwInput(pw, setPw, true, show, () => setShow((x) => !x))}
+              </Field>
               <Btn type="submit" variant="brand" className="h-12 w-full">
                 Masuk sebagai {R.label}
               </Btn>
@@ -478,10 +490,10 @@ export default function FormLogin({ onLogin }: { onLogin: (r: Role, u?: { nama: 
                 />
               </Field>
               <Field light label="Kata sandi" hint="Minimal 6 karakter">
-                {pwInput(pw, setPw, false)}
+                {pwInput(pw, setPw, false, show, () => setShow((x) => !x))}
               </Field>
               <Field light label="Ulangi kata sandi">
-                {pwInput(pw2, setPw2, false)}
+                {pwInput(pw2, setPw2, false, show2, () => setShow2((x) => !x))}
               </Field>
               {role === "koordinator" && (
                 <Field

@@ -5,7 +5,6 @@ import type { Departure, Jalur, Segment, Vehicle } from "@/lib/data"
 import { JALUR, ME, SEGMENTS, TODAY, VEHICLES, seg, uid } from "@/lib/data"
 import { Btn, Dialog, Field, cx, inputCls } from "@/components/ui"
 import { TopBar } from "./shared"
-import { getMasterData } from "@/lib/supabaseService"
 
 interface Props {
   deps: Departure[]
@@ -34,22 +33,6 @@ export default function InputKeberangkatan({
   const [veh, setVeh] = useState("")
   const [dup, setDup] = useState(false)
   const [tried, setTried] = useState(false)
-
-  // Ambil data master terkini dari Supabase
-  useEffect(() => {
-    getMasterData().then((m) => {
-      if (m.segments?.length) {
-        setSegments(m.segments)
-        setSegmentId((prev) => m.segments.find((s) => s.id === prev)?.id || m.segments[0].id)
-      }
-      if (m.jalurList?.length) {
-        setJalurList(m.jalurList)
-      }
-      if (m.vehicles?.length) {
-        setVehicles(m.vehicles)
-      }
-    })
-  }, [])
 
   const jalurOpts = useMemo(() => {
     const filtered = jalurList.filter(

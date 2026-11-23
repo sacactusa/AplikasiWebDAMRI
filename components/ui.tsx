@@ -1,12 +1,7 @@
 "use client"
 
-<<<<<<< HEAD
-import { useEffect, useState, type ReactNode } from "react"
-import { AlertTriangle, CheckCircle2, Lock, X, Inbox, XCircle } from "lucide-react"
-=======
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { AlertTriangle, CalendarDays, CheckCircle2, Lock, X, Inbox, XCircle } from "lucide-react"
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
 import type { Status } from "@/lib/data"
 
 const logoDamri = "/assets/logo-damri.png"
@@ -90,6 +85,7 @@ export function Dialog({
   onClose,
   danger,
   actions,
+  className,
 }: {
   open: boolean
   title: string
@@ -97,15 +93,12 @@ export function Dialog({
   onClose: () => void
   danger?: boolean
   actions: ReactNode
+  className?: string
 }) {
   if (!open) return null
   return (
     <div
-<<<<<<< HEAD
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/30 backdrop-blur-sm p-4 sm:items-center"
-=======
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-xs transition-opacity"
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 transition-opacity"
       onClick={onClose}
     >
       <div
@@ -114,6 +107,7 @@ export function Dialog({
         className={cx(
           "rise w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-line bg-white p-6 shadow-2xl",
           danger && "border-t-4 border-red-600",
+          className,
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -147,11 +141,7 @@ export function Drawer({
 }) {
   if (!open) return null
   return (
-<<<<<<< HEAD
-    <div className="fixed inset-0 z-[60] bg-slate-900/25 backdrop-blur-xs" onClick={onClose}>
-=======
-    <div className="fixed inset-0 z-[60] bg-ink/40 backdrop-blur-xs transition-opacity" onClick={onClose}>
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
+    <div className="fixed inset-0 z-[60] bg-slate-900/25 backdrop-blur-xs transition-opacity" onClick={onClose}>
       <aside
         className="slidein absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -213,11 +203,7 @@ export function Toasts({
   items: ToastItem[]
   onClear?: () => void
 }) {
-<<<<<<< HEAD
-  if (items.length === 0) return null
-=======
   if (!items || items.length === 0) return null
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 p-4">
@@ -233,11 +219,7 @@ export function Toasts({
           <div
             key={t.id}
             onClick={onClear}
-<<<<<<< HEAD
             className="pop pointer-events-auto flex w-64 sm:w-72 min-h-56 sm:min-h-60 flex-col items-center justify-center rounded-3xl border border-white/80 bg-white/75 p-6 text-center text-ink shadow-2xl shadow-slate-900/15 backdrop-blur-xl ring-1 ring-black/10 cursor-pointer"
-=======
-            className="pop pointer-events-auto flex w-64 sm:w-72 min-h-56 sm:min-h-60 flex-col items-center justify-center rounded-3xl border border-white/80 bg-white/85 p-6 text-center text-ink shadow-2xl shadow-slate-900/15 backdrop-blur-xl ring-1 ring-black/10 cursor-pointer"
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
           >
             <div className="mb-4">
               {isError ? (
@@ -497,8 +479,6 @@ export function Logo({ light }: { light?: boolean }) {
     </div>
   )
 }
-<<<<<<< HEAD
-=======
 
 export function DateInput({
   value,
@@ -574,4 +554,3 @@ export function DateInput({
     </div>
   )
 }
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae

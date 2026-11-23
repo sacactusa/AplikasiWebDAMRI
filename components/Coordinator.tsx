@@ -3,12 +3,13 @@
 
 import { useEffect, useRef, useState } from "react"
 import {
-  Archive,
+  HardDrive,
   Camera,
   ClipboardCheck,
   Database,
   FileSpreadsheet,
   LayoutDashboard,
+  LogOut,
   Menu,
   ScrollText,
   Trash2,
@@ -53,16 +54,6 @@ export default function Coordinator({
   const [passwordDialog, setPasswordDialog] = useState(false)
   const [logoutDialog, setLogoutDialog] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-<<<<<<< HEAD
-
-  const [profile, setProfile] = useState<CoordinatorProfile>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("damri_coord_profile")
-        if (saved) return JSON.parse(saved)
-      } catch {}
-    }
-=======
   const [profile, setProfile] = useState<CoordinatorProfile>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -85,7 +76,6 @@ export default function Coordinator({
         foto: PROFILE_PHOTO,
       }
     }
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
     return {
       nama: "Rina Marlina",
       email: "koordinator@damri.co.id",
@@ -93,8 +83,14 @@ export default function Coordinator({
       foto: PROFILE_PHOTO,
     }
   })
-<<<<<<< HEAD
-=======
+  const [profileDraft, setProfileDraft] = useState<CoordinatorProfile>(profile)
+  const [password, setPassword] = useState("damri123")
+  const [passwordForm, setPasswordForm] = useState({
+    current: "",
+    next: "",
+    confirm: "",
+  })
+  const [passwordError, setPasswordError] = useState("")
 
   useEffect(() => {
     if (currentUser) {
@@ -110,15 +106,6 @@ export default function Coordinator({
       }))
     }
   }, [currentUser])
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
-  const [profileDraft, setProfileDraft] = useState<CoordinatorProfile>(profile)
-  const [password, setPassword] = useState("damri123")
-  const [passwordForm, setPasswordForm] = useState({
-    current: "",
-    next: "",
-    confirm: "",
-  })
-  const [passwordError, setPasswordError] = useState("")
   const waiting = deps.filter((d) => d.status === "dikirim").length
   const online = !offline
 
@@ -158,18 +145,13 @@ export default function Coordinator({
     ["laporan", "Laporan / Ekspor", <FileSpreadsheet size={18} key="l" />],
     ["master", "Data Master", <Database size={18} key="m" />],
     ["akun", "Akun", <Users size={18} key="ak" />],
-    ["arsip", "Arsip & Backup", <Archive size={18} key="ar" />],
+    ["arsip", "Backup Data", <HardDrive size={18} key="ar" />],
     ["audit", "Audit Log", <ScrollText size={18} key="au" />],
   ]
 
   const nav = (
-<<<<<<< HEAD
     <div className="flex h-full flex-col overflow-y-auto bg-gradient-to-b from-navy to-[#06173a] p-4 text-white">
-      <div className="mb-8 mt-1 shrink-0 px-2">
-=======
-    <div className="flex h-full flex-col bg-gradient-to-b from-navy to-navy-900 p-4 text-white">
-      <div className="mb-6 mt-1 flex items-center justify-between px-2">
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
+      <div className="mb-8 mt-1 flex items-center justify-between px-2">
         <Logo light />
         {menu && (
           <button
@@ -261,7 +243,6 @@ export default function Coordinator({
             </p>
           </div>
         </button>
-<<<<<<< HEAD
         <button
           onClick={() => {
             setMenu(false)
@@ -271,19 +252,13 @@ export default function Coordinator({
         >
           <LogOut size={16} /> Keluar
         </button>
-=======
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
       </div>
     </div>
   )
 
   return (
     <div className="flex min-h-screen bg-wash text-ink">
-<<<<<<< HEAD
       <aside className="sticky top-0 z-20 hidden h-screen w-64 shrink-0 self-start lg:block">
-=======
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-navy-900/20 bg-navy shadow-sm lg:block">
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
         {nav}
       </aside>
       {menu && (
@@ -300,11 +275,7 @@ export default function Coordinator({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-<<<<<<< HEAD
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-white px-4 lg:hidden">
-=======
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-white/95 px-4 backdrop-blur-md shadow-2xs lg:hidden">
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-white/95 px-4 backdrop-blur-md shadow-2xs lg:hidden">
           <button
             aria-label="Buka menu navigasi"
             onClick={() => setMenu(true)}
@@ -314,11 +285,7 @@ export default function Coordinator({
           </button>
           <Logo />
         </header>
-<<<<<<< HEAD
-        <main className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-8 sm:py-10">
-=======
         <main className="w-full max-w-[1280px] mx-auto px-4 py-6 sm:px-8 sm:py-8 flex-1 min-w-0">
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
           {page === "verifikasi" && (
             <VerifikasiKeberangkatan
               deps={deps}
@@ -326,18 +293,19 @@ export default function Coordinator({
               toast={toast}
               go={setPage}
               clearNew={clearNew}
+              currentUser={currentUser}
             />
           )}
           {page === "dashboard" && (
             <DashboardAnalitik deps={deps} go={setPage} />
           )}
           {page === "laporan" && (
-            <LaporanOperasional deps={deps} toast={toast} />
+            <LaporanOperasional deps={deps} toast={toast} currentUser={currentUser} />
           )}
           {page === "master" && <MasterData toast={toast} currentUser={currentUser} />}
           {page === "akun" && <ManajemenAkun toast={toast} currentUser={currentUser} />}
           {page === "arsip" && <ArsipBackup toast={toast} deps={deps} />}
-          {page === "audit" && <AuditLog />}
+          {page === "audit" && <AuditLog currentUser={currentUser} />}
           {page === "profil" && (
             <ProfilKoordinator
               profile={profile}
@@ -385,11 +353,11 @@ export default function Coordinator({
                 setProfile(updated)
                 if (typeof window !== "undefined") {
                   try {
-<<<<<<< HEAD
-                    localStorage.setItem("damri_coord_profile", JSON.stringify(updated))
-=======
-                    const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"; localStorage.setItem(key, JSON.stringify(updated)); if (currentUser?.id) { supabase.from("profiles").update({ nama: updated.nama, telepon: updated.telepon }).eq("id", currentUser.id).then(() => {}); }
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
+                    const key = currentUser?.email ? "damri_coord_profile_" + currentUser.email : "damri_coord_profile"
+                    localStorage.setItem(key, JSON.stringify(updated))
+                    if (currentUser?.id) {
+                      supabase.from("profiles").update({ nama: updated.nama, telepon: updated.telepon }).eq("id", currentUser.id).then(() => {})
+                    }
                   } catch {}
                 }
                 setProfileDialog(false)
@@ -453,12 +421,9 @@ export default function Coordinator({
                   </button>
                 )}
               </div>
-<<<<<<< HEAD
-=======
               <p className="mt-1.5 text-[11px] text-mute">
                 Format: JPG, PNG, atau WebP (Maks. 5 MB)
               </p>
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
             </div>
           </div>
           <Field label="Nama lengkap">
@@ -611,11 +576,7 @@ export default function Coordinator({
         }
       >
         <p>
-<<<<<<< HEAD
-          Apakah Anda yakin ingin keluar dari akun Koordinator? Pastikan seluruh
-=======
           Apakah Anda yakin ingin keluar dari akun Koordinator ({profile.nama})? Pastikan seluruh
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
           pemeriksaan dan perubahan data operasional telah disimpan sebelum
           mengakhiri sesi ini.
         </p>

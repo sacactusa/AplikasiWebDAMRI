@@ -62,8 +62,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
     n: string
     e: string
   } | null>(null)
-<<<<<<< HEAD
-=======
   const [deleteTarget, setDeleteTarget] = useState<{
     n: string
     e: string
@@ -75,7 +73,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
     selectedRole: string
   } | null>(null)
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
 
   return (
     <>
@@ -134,29 +131,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                     {u.a ? "Aktif" : "Nonaktif"}
                   </span>
                 </td>
-<<<<<<< HEAD
-                <td className={cx(td, "whitespace-nowrap text-right")}>
-                  <button
-                    onClick={() => setReset(u.n)}
-                    className="mr-3 text-sm font-semibold text-navy hover:underline"
-                  >
-                    Reset sandi
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (u.a) {
-                        setDeactivateTarget({ n: u.n, e: u.e })
-                      } else {
-                        setUsers((p) =>
-                          p.map((x, k) => (k === i ? { ...x, a: true } : x)),
-                        )
-                        toast(`Akun ${u.n} berhasil diaktifkan kembali`)
-                      }
-                    }}
-                    className={cx(
-                      "text-sm font-semibold hover:underline",
-                      u.a ? "text-red-700" : "text-emerald-700",
-=======
                 <td className={cx(td, "w-28 whitespace-nowrap text-center")}>
                   <div className="relative inline-block text-left">
                     <button
@@ -297,7 +271,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                           </button>
                         </div>
                       </>
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
                     )}
                   </div>
                 </td>
@@ -512,16 +485,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
             </Btn>
             <Btn
               variant="danger"
-<<<<<<< HEAD
-              onClick={() => {
-                if (deactivateTarget) {
-                  setUsers((p) =>
-                    p.map((x) =>
-                      x.e === deactivateTarget.e ? { ...x, a: false } : x,
-                    ),
-                  )
-                  toast(`Akun ${deactivateTarget.n} dinonaktifkan`)
-=======
               onClick={async () => {
                 if (deactivateTarget) {
                   const target = deactivateTarget
@@ -544,7 +507,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
                   } catch (err) {
                     console.warn("Gagal nonaktifkan akun di Supabase:", err)
                   }
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
                   setDeactivateTarget(null)
                 }
               }}
@@ -561,8 +523,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
           dinonaktifkan.
         </p>
       </Dialog>
-<<<<<<< HEAD
-=======
       <Dialog
         open={!!deleteTarget}
         danger
@@ -633,7 +593,6 @@ export default function ManajemenAkun({ toast, currentUser }: Props) {
           disarankan memilih opsi <em>Nonaktifkan</em>.
         </p>
       </Dialog>
->>>>>>> c140d54be822b31858e65a12a3cd07fd598260ae
     </>
   )
 }
