@@ -43,7 +43,7 @@ export default function AuditLog({ currentUser }: Props) {
 
   return (
     <>
-      <Title sub="Catatan tidak dapat diubah atau dihapus.">
+      <Title sub="Catatan riwayat tidak dapat diubah atau dihapus melalui aplikasi web.">
         Audit Log
       </Title>
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -141,13 +141,13 @@ export default function AuditLog({ currentUser }: Props) {
                 return (
                   <div key={k}>
                     {b !== undefined && (
-                      <div className="bg-red-50 px-3 py-1.5 text-red-800">
+                      <div className="break-words bg-red-50 px-3 py-1.5 text-red-800">
                         <span className="mr-2 font-bold">−</span>
                         {k}: {String(b)}
                       </div>
                     )}
                     {n !== undefined && (
-                      <div className="bg-emerald-50 px-3 py-1.5 text-emerald-800">
+                      <div className="break-words bg-emerald-50 px-3 py-1.5 text-emerald-800">
                         <span className="mr-2 font-bold">+</span>
                         {k}: {String(n)}
                       </div>

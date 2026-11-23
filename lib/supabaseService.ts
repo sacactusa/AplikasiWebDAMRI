@@ -378,15 +378,18 @@ export async function createDeparture(
 
     const newId = data.id
 
+    const ruteLabel = d.jalurNama || d.jalurId || ""
+    const detail = ruteLabel ? `${d.cb} (${ruteLabel} · ${d.time})` : `${d.cb} (${d.time})`
+
     // Catat ke audit_log
     await logAudit({
       user_nama: d.driver,
       aksi: "Tambah",
       tabel: "keberangkatan",
       record_id: newId,
-      objek: `keberangkatan · ${d.cb} (${d.time})`,
+      objek: `Keberangkatan · ${detail}`,
       sebelum: {},
-      sesudah: { status: d.status, cb: d.cb, tanggal: d.date, rute: d.jalurId },
+      sesudah: { status: d.status, cb: d.cb, tanggal: d.date, rute: ruteLabel },
     })
 
     return { success: true, id: newId }
@@ -463,14 +466,16 @@ export async function updateDeparture(
     }
 
     try {
+      const ruteLabel = d.jalurNama || d.jalurId || ""
+      const detail = ruteLabel ? `${d.cb} (${ruteLabel} · ${d.time})` : `${d.cb} (${d.time})`
       await logAudit({
         user_nama: driverName || d.driver,
         aksi: isDikirim ? "Kirim" : "Ubah",
         tabel: "keberangkatan",
         record_id: d.id,
-        objek: `keberangkatan · ${d.id}`,
+        objek: `Keberangkatan · ${detail}`,
         sebelum: {},
-        sesudah: { status: d.status, kmTempuh: payload.km_tempuh, penumpang: payload.penumpang },
+        sesudah: { status: d.status, cb: d.cb, rute: ruteLabel, kmTempuh: payload.km_tempuh, penumpang: payload.penumpang },
       })
     } catch {}
 
@@ -490,6 +495,21 @@ export async function deleteDraftDeparture(
   userNama = "Sopir",
 ): Promise<boolean> {
   try {
+    let detail = id
+    try {
+      const { data: dep } = await supabase
+        .from("keberangkatan")
+        .select("jam, kendaraan(plat), jalur(nama)")
+        .eq("id", id)
+        .maybeSingle()
+      if (dep) {
+        const plat = (dep as any)?.kendaraan?.plat || "Bus"
+        const jNama = (dep as any)?.jalur?.nama || ""
+        const jam = dep?.jam ? dep.jam.slice(0, 5) : ""
+        detail = jNama ? `${plat} (${jNama} · ${jam})` : `${plat} (${jam})`
+      }
+    } catch {}
+
     const { error } = await supabase
       .from("keberangkatan")
       .delete()
@@ -506,7 +526,7 @@ export async function deleteDraftDeparture(
       aksi: "Hapus",
       tabel: "keberangkatan",
       record_id: id,
-      objek: `keberangkatan draft · ${id}`,
+      objek: `Keberangkatan draft · ${detail}`,
       sebelum: { status: "draft" },
       sesudah: {},
     })
@@ -543,12 +563,27 @@ export async function approveDeparture(
       return false
     }
 
+    let detail = id
+    try {
+      const { data: dep } = await supabase
+        .from("keberangkatan")
+        .select("jam, kendaraan(plat), jalur(nama)")
+        .eq("id", id)
+        .maybeSingle()
+      if (dep) {
+        const plat = (dep as any)?.kendaraan?.plat || "Bus"
+        const jNama = (dep as any)?.jalur?.nama || ""
+        const jam = dep?.jam ? dep.jam.slice(0, 5) : ""
+        detail = jNama ? `${plat} (${jNama} · ${jam})` : `${plat} (${jam})`
+      }
+    } catch {}
+
     await logAudit({
       user_nama: coordNama,
       aksi: "Setujui",
       tabel: "keberangkatan",
       record_id: id,
-      objek: `keberangkatan · ${id}`,
+      objek: `Keberangkatan · ${detail}`,
       sebelum: { status: "dikirim" },
       sesudah: { status: "disetujui" },
     })
@@ -586,12 +621,27 @@ export async function rejectDeparture(
       return false
     }
 
+    let detail = id
+    try {
+      const { data: dep } = await supabase
+        .from("keberangkatan")
+        .select("jam, kendaraan(plat), jalur(nama)")
+        .eq("id", id)
+        .maybeSingle()
+      if (dep) {
+        const plat = (dep as any)?.kendaraan?.plat || "Bus"
+        const jNama = (dep as any)?.jalur?.nama || ""
+        const jam = dep?.jam ? dep.jam.slice(0, 5) : ""
+        detail = jNama ? `${plat} (${jNama} · ${jam})` : `${plat} (${jam})`
+      }
+    } catch {}
+
     await logAudit({
       user_nama: coordNama,
       aksi: "Tolak",
       tabel: "keberangkatan",
       record_id: id,
-      objek: `keberangkatan · ${id}`,
+      objek: `Keberangkatan · ${detail}`,
       sebelum: { status: "dikirim" },
       sesudah: { status: "perbaikan", catatan: note },
     })
@@ -605,6 +655,8 @@ export async function rejectDeparture(
 
 /**
  * Mengambil riwayat Audit Log dari tabel audit_log Supabase
+ * Dilengkapi dengan resolusi ID referensi (keberangkatan, rute, kendaraan, profil)
+ * agar riwayat terbaca jelas oleh manusia, serta deduplikasi entri ganda dari trigger DB & client.
  */
 export async function getAuditLogs(isDemo = false): Promise<AuditItem[]> {
   if (isDemo) {
@@ -622,16 +674,182 @@ export async function getAuditLogs(isDemo = false): Promise<AuditItem[]> {
       return []
     }
 
-    return data.map((row) => ({
-      id: row.id,
-      t: formatAuditTime(row.waktu),
-      rawTime: row.waktu,
-      u: row.user_nama || "Sistem",
-      a: row.aksi,
-      o: row.objek || `${row.tabel} #${row.record_id || ""}`.trim(),
-      before: row.sebelum || {},
-      after: row.sesudah || {},
-    }))
+    // 1. Ambil data referensi secara paralel untuk resolusi nama & plat
+    const [
+      { data: deps },
+      { data: vehicles },
+      { data: routes },
+      { data: profs },
+      { data: segs },
+    ] = await Promise.all([
+      supabase
+        .from("keberangkatan")
+        .select("id, jam, kendaraan_id, jalur_id, kendaraan(plat), jalur(nama)"),
+      supabase.from("kendaraan").select("id, plat"),
+      supabase.from("jalur").select("id, nama"),
+      supabase.from("profiles").select("id, nama"),
+      supabase.from("segmen").select("id, nama"),
+    ])
+
+    const vehicleMap = new Map((vehicles || []).map((v) => [v.id, v.plat]))
+    const routeMap = new Map((routes || []).map((r) => [r.id, r.nama]))
+    const profileMap = new Map((profs || []).map((p) => [p.id, p.nama]))
+    const segmenMap = new Map((segs || []).map((s) => [s.id, s.nama]))
+
+    const depMap = new Map<string, string>()
+    ;(deps || []).forEach((d: any) => {
+      const plat = d.kendaraan?.plat || vehicleMap.get(d.kendaraan_id) || "Bus"
+      const jalur = d.jalur?.nama || routeMap.get(d.jalur_id) || ""
+      const jam = d.jam ? d.jam.slice(0, 5) : ""
+      const parts = [jalur, jam].filter(Boolean)
+      const label = parts.length > 0 ? `${plat} (${parts.join(" · ")})` : plat
+      depMap.set(d.id, label)
+    })
+
+    // 2. Deduplikasi log ganda yang tercatat bersamaan (< 4 detik) oleh client & trigger Postgres
+    const deduped: typeof data = []
+    for (let i = 0; i < data.length; i++) {
+      const cur = data[i]
+      const prev = deduped[deduped.length - 1]
+      if (prev) {
+        const timeDiff = Math.abs(
+          new Date(cur.waktu).getTime() - new Date(prev.waktu).getTime()
+        )
+        const sameAction = cur.aksi === prev.aksi
+        const sameUser =
+          cur.user_nama === prev.user_nama ||
+          cur.user_nama === "Sistem" ||
+          prev.user_nama === "Sistem"
+        const sameRec =
+          cur.record_id && prev.record_id && cur.record_id === prev.record_id
+
+        if (sameAction && sameUser && sameRec && timeDiff <= 4000) {
+          // Gabungkan payload: utamakan detail yang lebih lengkap
+          if (
+            Object.keys(cur.sesudah || {}).length >
+            Object.keys(prev.sesudah || {}).length
+          ) {
+            prev.sesudah = { ...(prev.sesudah || {}), ...(cur.sesudah || {}) }
+          }
+          if (
+            Object.keys(cur.sebelum || {}).length >
+            Object.keys(prev.sebelum || {}).length
+          ) {
+            prev.sebelum = { ...(prev.sebelum || {}), ...(cur.sebelum || {}) }
+          }
+          if (cur.user_nama !== "Sistem" && prev.user_nama === "Sistem") {
+            prev.user_nama = cur.user_nama
+          }
+          // Jika salah satu sudah memiliki format objek deskriptif, gunakan itu
+          if (
+            !cur.objek.includes("-") &&
+            prev.objek.match(/[0-9a-f]{8}-[0-9a-f]{4}/i)
+          ) {
+            prev.objek = cur.objek
+          }
+          continue
+        }
+      }
+      deduped.push({ ...cur })
+    }
+
+    // Helper untuk merapikan UUID dan data foto besar pada Sebelum & Sesudah di drawer
+    const sanitizePayload = (obj: Record<string, any> | null | undefined) => {
+      if (!obj || typeof obj !== "object") return {}
+      const cleaned: Record<string, any> = {}
+      for (const [k, v] of Object.entries(obj)) {
+        if (k === "foto_url" && typeof v === "string" && v.length > 100) {
+          cleaned[k] = "[Foto Profil]"
+        } else if (
+          (k === "jalur_id" || k === "rute") &&
+          typeof v === "string" &&
+          routeMap.has(v)
+        ) {
+          cleaned["jalur"] = routeMap.get(v)
+        } else if (
+          k === "kendaraan_id" &&
+          typeof v === "string" &&
+          vehicleMap.has(v)
+        ) {
+          cleaned["kendaraan"] = vehicleMap.get(v)
+        } else if (
+          (k === "sopir_id" ||
+            k === "disetujui_oleh" ||
+            k === "ditolak_oleh") &&
+          typeof v === "string" &&
+          profileMap.has(v)
+        ) {
+          cleaned[k.replace("_id", "")] = profileMap.get(v)
+        } else if (
+          k === "segmen_id" &&
+          typeof v === "string" &&
+          segmenMap.has(v)
+        ) {
+          cleaned["segmen"] = segmenMap.get(v)
+        } else {
+          cleaned[k] = v
+        }
+      }
+      return cleaned
+    }
+
+    return deduped.map((row) => {
+      let objek = row.objek || `${row.tabel} #${row.record_id || ""}`.trim()
+      const recId = row.record_id || ""
+
+      // Resolusi deskripsi keberangkatan jika masih berupa UUID
+      if (depMap.has(recId)) {
+        objek = `Keberangkatan · ${depMap.get(recId)}`
+      } else {
+        const uuidMatch = objek.match(
+          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+        )
+        if (uuidMatch && depMap.has(uuidMatch[0])) {
+          objek = `Keberangkatan · ${depMap.get(uuidMatch[0])}`
+        } else if (
+          objek.toLowerCase().startsWith("keberangkatan · ") &&
+          uuidMatch
+        ) {
+          // Fallback dari sesudah/sebelum jika data record sudah terhapus
+          const ses = row.sesudah || {}
+          const seb = row.sebelum || {}
+          const plat =
+            ses.cb ||
+            seb.cb ||
+            vehicleMap.get(ses.kendaraan_id || seb.kendaraan_id)
+          const rute = routeMap.get(
+            ses.jalur_id || seb.jalur_id || ses.rute || seb.rute
+          )
+          const jam = ses.jam || seb.jam
+          if (plat) {
+            const detail = [rute, jam ? String(jam).slice(0, 5) : ""]
+              .filter(Boolean)
+              .join(" · ")
+            objek = `Keberangkatan · ${plat}${detail ? ` (${detail})` : ""}`
+          }
+        }
+      }
+
+      // Resolusi nama profil jika tabel profiles
+      if (row.tabel === "profiles" && profileMap.has(recId)) {
+        objek = `Profil · ${profileMap.get(recId)}`
+      } else if (row.tabel === "kendaraan" && vehicleMap.has(recId)) {
+        objek = `Kendaraan · ${vehicleMap.get(recId)}`
+      } else if (row.tabel === "jalur" && routeMap.has(recId)) {
+        objek = `Jalur · ${routeMap.get(recId)}`
+      }
+
+      return {
+        id: row.id,
+        t: formatAuditTime(row.waktu),
+        rawTime: row.waktu,
+        u: row.user_nama || "Sistem",
+        a: row.aksi,
+        o: objek,
+        before: sanitizePayload(row.sebelum),
+        after: sanitizePayload(row.sesudah),
+      }
+    })
   } catch (err) {
     console.warn("Gagal mengambil audit log dari Supabase:", err)
     return []

@@ -490,7 +490,7 @@ export default function VerifikasiKeberangkatan({ deps, setDeps, toast, go, clea
           </>
         }
       >
-        <Field label="Catatan perbaikan (wajib)">
+        <Field label="Catatan perbaikan">
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -568,9 +568,9 @@ function DetailBody({
           activePaxs = (passengerTypes && passengerTypes.length > 0)
             ? passengerTypes.filter((p) => p.aktif)
             : [
-                { id: "umum", nama: "Umum", aktif: true },
-                { id: "pm", nama: "Pelajar / Mahasiswa (P/M)", aktif: true },
-              ]
+              { id: "umum", nama: "Umum", aktif: true },
+              { id: "pm", nama: "Pelajar / Mahasiswa (P/M)", aktif: true },
+            ]
         }
 
         const items: Array<{ id: string; nama: string; tarif: number }> = []

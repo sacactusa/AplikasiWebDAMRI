@@ -254,10 +254,10 @@ export const INCOMING: Departure[] = [
 ]
 
 export const AUDIT = [
-  { t: '16 Okt 2026 09:12', u: 'Rina Marlina', a: 'Setujui', o: 'keberangkatan #d117', before: { status: 'dikirim' }, after: { status: 'disetujui' } },
-  { t: '16 Okt 2026 08:47', u: 'Rina Marlina', a: 'Ubah', o: 'tarif · Dipatiukur – Soekarno-Hatta', before: { tarif: 'Rp 140.000', berlaku_mulai: '01 Jan 2026' }, after: { tarif: 'Rp 150.000', berlaku_mulai: '01 Okt 2026' } },
-  { t: '15 Okt 2026 16:30', u: 'Rina Marlina', a: 'Tolak', o: 'keberangkatan #d101', before: { status: 'dikirim', penumpang: 21 }, after: { status: 'draft', catatan: 'Jumlah penumpang tidak sesuai manifest' } },
-  { t: '15 Okt 2026 11:05', u: 'Budi Hartono', a: 'Tambah', o: 'akun · Iwan Setiawan', before: {}, after: { peran: 'Sopir', aktif: 'ya' } },
-  { t: '14 Okt 2026 20:00', u: 'Sistem', a: 'Backup', o: 'database', before: {}, after: { status: 'Berhasil', ukuran: '48,2 MB' } },
-  { t: '14 Okt 2026 10:21', u: 'Budi Hartono', a: 'Nonaktifkan', o: 'kendaraan · CB-1072', before: { aktif: 'ya' }, after: { aktif: 'tidak' } },
+  { t: '16 Okt 2026 09:12', u: 'Rina Marlina', a: 'Setujui', o: 'Keberangkatan · BA 7021 TU (Padang - Bukittinggi · 09:00)', before: { status: 'dikirim' }, after: { status: 'disetujui' } },
+  { t: '16 Okt 2026 08:47', u: 'Rina Marlina', a: 'Ubah', o: 'Tarif · Dipatiukur – Soekarno-Hatta', before: { tarif: 'Rp 140.000', berlaku_mulai: '01 Jan 2026' }, after: { tarif: 'Rp 150.000', berlaku_mulai: '01 Okt 2026' } },
+  { t: '15 Okt 2026 16:30', u: 'Rina Marlina', a: 'Tolak', o: 'Keberangkatan · BA 7025 TU (Padang - Painan · 16:00)', before: { status: 'dikirim', penumpang: 21 }, after: { status: 'draft', catatan: 'Jumlah penumpang tidak sesuai manifest' } },
+  { t: '15 Okt 2026 11:05', u: 'Budi Hartono', a: 'Tambah', o: 'Akun · Iwan Setiawan', before: {}, after: { peran: 'Sopir', aktif: 'ya' } },
+  { t: '14 Okt 2026 20:00', u: 'Sistem', a: 'Backup', o: 'Database DAMRI', before: {}, after: { status: 'Berhasil', ukuran: '48,2 MB' } },
+  { t: '14 Okt 2026 10:21', u: 'Budi Hartono', a: 'Nonaktifkan', o: 'Kendaraan · BA 7030 TU', before: { aktif: 'ya' }, after: { aktif: 'tidak' } },
 ]
